@@ -10,7 +10,7 @@
   const k2 = (sig, n, v, d, cls = 'neu') => `<div class="kpi ${cls}"><div class="kl"><span class="sig">${sig}</span>${n}</div><div class="kv">${v}</div><div class="kd">${d}</div></div>`;
   const slotMin = p => toNum(p.slot) || toNum(S.cad.clinic.slot) || 50;
   const win = () => windowMonths();
-  const rowsIn = ms => { const set = new Set(ms); return S.agenda.filter(r => set.has(r.d.slice(0, 7))); };
+  const rowsIn = ms => { const set = new Set(ms); const rg = typeof agRange === 'function' ? agRange() : null; return S.agenda.filter(r => set.has(r.d.slice(0, 7)) && (!rg || (r.d >= rg[0] && r.d <= rg[1]))); };
 
   /* ---------- 1. Capacidade e ociosidade ---------- */
   function capGrid(ms) {   // capacidade por dia da semana x hora, somando o período
@@ -47,6 +47,17 @@
   }
 
   /* ---------- 2. Faltas, cancelamentos e reocupação ---------- */
+  function statusCard(rows) {
+    const cnt = {}; rows.forEach(r => { const k = stKey(r); cnt[k] = (cnt[k] || 0) + 1; });
+    const lab = Object.fromEntries(ST_KINDS);
+    const list = Object.entries(cnt).map(([k, n]) => ({ k, n, kind: S.cad.statusMap[k] || defaultKind(k) })).sort((a, b) => b.n - a.n);
+    const falt = list.filter(x => x.kind === 'falta' || x.kind === 'falta_cob');
+    const warn = !falt.length ? notice('warn', '<b>Nenhum status está classificado como falta.</b> A receita em risco e o absenteísmo dependem disso: indique qual status do seu sistema é a falta do paciente.') : '';
+    return `<div class="card"><div class="chead"><h3>Quais status contam como falta</h3><button class="btn sm" onclick="CADTAB='status';show('cad')">Alterar classificação dos status</button></div>${warn}
+      <div class="tscroll"><table class="tbl"><thead><tr><th>Status no sistema</th><th>Registros no período</th><th>Classificado como</th></tr></thead><tbody>
+      ${list.map(x => `<tr${x.kind === 'falta' || x.kind === 'falta_cob' ? ' style="background:rgba(224,138,0,.10)"' : ''}><td><b>${esc(x.k.split(' ▸ ')[0] || '(vazio)')}</b>${x.k.includes(' ▸ ') ? `<br><small>${esc(x.k.split(' ▸ ')[1])}</small>` : ''}</td><td class="num">${fmtNum(x.n)}</td><td>${esc(lab[x.kind] || x.kind)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="howto"><b>Como funciona:</b> a receita em risco soma o valor de tabela das sessões classificadas como <b>falta sem cobrança</b>. Falta com cobrança já entra na receita; "sem baixa" é pendência de registro e não é contada como falta.</div></div>`;
+  }
   function tabRisco(A, ms) {
     const rows = rowsIn(ms); const slotKey = r => r.prof + '|' + r.d + '|' + (r.h || '').slice(0, 5);
     const busy = {}; rows.forEach(r => { const k = kindOf(r); if (['realizado', 'agendado', 'sembaixa', 'falta_cob'].includes(k) && r.h) (busy[slotKey(r)] = busy[slotKey(r)] || new Set()).add(r.p); });
@@ -58,7 +69,8 @@
     const tl = ms.reduce((s, m) => s + perM[m].lib, 0), tr = ms.reduce((s, m) => s + perM[m].reoc, 0), rr = ms.reduce((s, m) => s + perM[m].risco, 0), rn = ms.reduce((s, m) => s + perM[m].riscoN, 0);
     const byProf = {}; freed.forEach(f => { const o = (byProf[f.prof || 'Não informado'] = byProf[f.prof || 'Não informado'] || { lib: 0, reoc: 0, falta: 0, cp: 0, cc: 0, ap: 0 }); o.lib++; if (reoc(f)) o.reoc++; const k = kindOf(f); if (k === 'falta' || k === 'falta_cob') o.falta++; if (k === 'canc_pac') o.cp++; if (k === 'canc_clin') o.cc++; if (k === 'aus_prof') o.ap++; });
     const tbl = Object.entries(byProf).sort((a, b) => b[1].lib - a[1].lib);
-    return `<div class="kpis">${k2('Receita em risco', 'Faltas sem cobrança × tabela', rn ? fmtMoney(rr) : '—', `${fmtNum(rn)} sessões faltadas e não cobradas, valorizadas pela tabela do convênio.`, rn ? 'bad' : 'neu')}
+    const stCard = statusCard(rows);
+    return stCard + `<div class="kpis">${k2('Receita em risco', 'Faltas sem cobrança × tabela', rn ? fmtMoney(rr) : '—', `${fmtNum(rn)} sessões faltadas e não cobradas, valorizadas pela tabela do convênio.`, rn ? 'bad' : 'neu')}
       ${k2('Vagas liberadas', 'Faltas e cancelamentos', fmtNum(tl), 'Horários que ficaram vagos por falta, cancelamento ou ausência do profissional.')}
       ${k2('Reocupação', 'Vagas reocupadas', tl ? fmtPct(tr / tl) : '—', `${fmtNum(tr)} de ${fmtNum(tl)} vagas liberadas foram preenchidas por outro paciente no mesmo horário.`, tl && tr / tl >= .3 ? 'good' : 'neu')}</div>
     <div class="card"><div class="chead"><h3>Por mês</h3></div>${monthTable(ms, [
@@ -122,7 +134,7 @@
   const isoDateOf = v => { if (!v) return ''; if (v instanceof Date) return isoLocal(v); const s = String(v).trim(); const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if (m) return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : ''; };
   function tabEspera(A, ms) {
     const L = S.espera || []; const hoje = isoLocal(new Date());
-    const head = `<div class="card smart"><div><h3>Lista de espera</h3><p>Planilha com uma linha por pessoa na fila: paciente, data de entrada, especialidade, convênio e situação. Os nomes são trocados por código na importação e não ficam gravados.</p></div><button class="btn" onclick="AgAdv.importEspera()">Importar lista de espera</button></div>`;
+    const head = `<div class="card smart"><div><h3>Lista de espera</h3><p>Planilha com uma linha por pessoa na fila: paciente, data de entrada, especialidade, convênio e situação. Os nomes são trocados por código na importação e não ficam gravados.</p></div><div class="row" style="margin:0"><a class="btn ghost" href="modelos/Modelo_Lista_de_Espera_ELOGA.xlsx" download>Baixar modelo (.xlsx)</a><button class="btn" onclick="AgAdv.importEspera()">Importar lista de espera</button></div></div>`;
     if (!L.length) return head + notice('', 'Nenhuma lista importada. Colunas reconhecidas: paciente, data de entrada, especialidade, convênio, profissional, situação e data de saída.');
     const ativa = x => !x.saida && !/atendid|agendad|conclu|cancel|desist|alta|iniciou/.test(norm(x.st));
     const fila = L.filter(ativa); const dias = x => x.d ? Math.max(0, Math.round((toDate(x.saida || hoje) - toDate(x.d)) / 864e5)) : null;

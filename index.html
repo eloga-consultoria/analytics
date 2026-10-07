@@ -671,7 +671,7 @@ const PDFW_B64='LyoqCiAqIEBsaWNzdGFydCBUaGUgZm9sbG93aW5nIGlzIHRoZSBlbnRpcmUgbGlj
    01 - Núcleo: campos, estado, armazenamento e utilitários
    ========================================================= */
 'use strict';
-const APP_VERSION = '3.0.0-beta.3';
+const APP_VERSION = '3.0.0-beta.4';
 const STORE_KEY = 'eloga_painel_financeiro_v1';
 const $ = id => document.getElementById(id);
 
@@ -2891,7 +2891,7 @@ const toMin = t => { const m = String(t||'').match(/(\d{1,2})[:h.]?(\d{2})?/); r
 const fmtHM = mm => String(Math.floor(mm/60)).padStart(2,'0') + ':' + String(mm%60).padStart(2,'0');
 function slotsOf(ranges, slot){ if (!ranges || !slot) return 0; let n = 0; String(ranges).split(/[;,]+/).forEach(r => { const [a,b] = r.split('-').map(toMin); if (isNum(a) && isNum(b) && b > a) n += Math.floor((b-a)/slot); }); return n; }
 function clinicRanges(w){ const h = (S.cad.clinic.hours||{})[w]; if (!h || !h.open || !h.close) return ''; return (h.ini && h.fim) ? `${h.open}-${h.ini}; ${h.fim}-${h.close}` : `${h.open}-${h.close}`; }
-function monthDays(ym){ const [y,m] = ym.split('-').map(Number); const hol = holidaySet(); const out = []; for (let d = 1; d <= new Date(y, m, 0).getDate(); d++) { const dt = new Date(y, m-1, d); if (!hol.has(isoLocal(dt))) out.push(dt); } return out; }
+function monthDays(ym){ const [y,m] = ym.split('-').map(Number); const hol = holidaySet(); const rg = (typeof agRange === 'function' && typeof PAGE !== 'undefined' && PAGE === 'agenda') ? agRange() : null; const out = []; for (let d = 1; d <= new Date(y, m, 0).getDate(); d++) { const dt = new Date(y, m-1, d); const iso = isoLocal(dt); if (hol.has(iso)) continue; if (rg && (iso < rg[0] || iso > rg[1])) continue; out.push(dt); } return out; }
 function profCapacity(p, ym){ const slot = toNum(p.slot) || toNum(S.cad.clinic.slot) || 50; const g = p.grade || {}; if (!Object.values(g).some(v => v)) return null; return monthDays(ym).reduce((n, dt) => n + slotsOf(g[dt.getDay()], slot), 0) * (toNum(p.simult) || 1); }
 function roomCapacity(ym, esp){ const SL = S.cad.salas || []; if (SL.length) { const slot = toNum(S.cad.clinic.slot) || 50; const days = monthDays(ym); let base = 0, any = false; days.forEach(dt => { const r = clinicRanges(dt.getDay()); if (r) any = true; base += slotsOf(r, slot); }); if (!any) return null; const rows = SL.filter(x => !esp || norm(x.esp) === norm(esp)); if (!rows.length) return esp ? null : 0; return Math.round(rows.reduce((s, x) => s + base * (toNum(x.cap) || 1) * ((toNum(x.pct) ?? 100) / 100), 0)); }
   if (esp) return null; const rooms = toNum(S.cad.clinic.rooms); const slot = toNum(S.cad.clinic.slot) || 50; if (!rooms) return null; let any = false; const n = monthDays(ym).reduce((s, dt) => { const r = clinicRanges(dt.getDay()); if (r) any = true; return s + slotsOf(r, slot); }, 0); return any ? n * rooms : null; }
@@ -3021,11 +3021,13 @@ function resetAll(){ _pidx = null; _cut = null; if (typeof agReset === 'function
 
 /* ---------- Motor da agenda ---------- */
 let _agCache = null; function agReset(){ _agCache = null; }
-function agFilter(){ S.agf = S.agf || {}; return Object.assign({ prof:'', esp:'', proc:'', payer:'' }, S.agf); }
+function agFilter(){ S.agf = S.agf || {}; const f = Object.assign({ prof:'', esp:'', proc:'', payer:'', from:'', to:'' }, S.agf); if (typeof PAGE === 'undefined' || PAGE !== 'agenda') { f.from = ''; f.to = ''; } return f; }
+function agRange(){ const f = agFilter(); return (f.from || f.to) ? [f.from || '0000-00-00', f.to || '9999-12-31'] : null; }
+function agRangeMonths(rg){ const all = [...new Set(S.agenda.map(r => r.d.slice(0,7)))].sort(); return all.filter(m => m >= rg[0].slice(0,7) && m <= rg[1].slice(0,7)); }
 const emptyK = () => Object.fromEntries(ST_KINDS.map(([k]) => [k, 0]));
 const pastN = o => PAST_KINDS.reduce((s,k) => s + (o[k]||0), 0);
 function agStats(){
-  const F = agFilter(); const ms = windowMonths(); const msSet = new Set(ms);
+  const F = agFilter(); const RG = agRange(); const ms = RG ? (agRangeMonths(RG).length ? agRangeMonths(RG) : windowMonths()) : windowMonths(); const msSet = new Set(ms);
   const key = JSON.stringify([F, ms, S.agenda.length, S.cad.statusMap, S.cad.clinic, S.cad.cfg.holidays, S.cad.profs.map(p=>[p.name,p.slot,p.grade,p.active,p.esp,p.simult]), S.cad.table.length, S.cad.salas, S.cad.pacotes]);
   if (_agCache && _agCache.key === key) return _agCache.v;
   const dimOK = r => (!F.prof || r.prof === F.prof) && (!F.esp || r.esp === F.esp) && (!F.proc || r.proc === F.proc) && (!F.payer || r.payer === F.payer);
@@ -3038,7 +3040,7 @@ function agStats(){
     const pt = (pm[r.p] = pm[r.p] || { m:new Set(), real:new Set() });
     if (k !== 'reagendado') pt.m.add(m);
     if (k === 'realizado') pt.real.add(m);
-    if (!msSet.has(m)) continue;
+    if (!msSet.has(m) || (RG && (r.d < RG[0] || r.d > RG[1]))) continue;
     K[k]++; const mo = M[m]; mo[k]++;
     const eleg = k === 'realizado' || k === 'falta_cob';
     let price = null; if (eleg) { price = pkgPrice(r); if (price === undefined) price = priceOf(r); mo.eleg++; if (isNum(price)) { receita += price; mo.receita += price; } else semPreco++; }
@@ -3209,7 +3211,7 @@ function renderAgenda(){
     if (metric === 'status') return monthTable(ms, names.flatMap(n => [{ l:n, f:m => { const g = A.dims[dk][n].bm[m]; return g ? pastN(g) + g.agendado : 0; }, cls:'b' }].concat(kinds.map(kk => ({ l:'   ' + KSHORT[kk], dot:KCOL[kk], f:m => { const g = A.dims[dk][n].bm[m]; return g ? g[kk] : 0; } })))), { first: 'Grupo / status' });
     return monthTable(ms, names.map(n => ({ l:n, f:m => { const g = A.dims[dk][n].bm[m]; return g ? g.receita : 0; }, fmt: fmtMoney })).concat([{ l:'Total', cls:'b', f:m => A.M[m].receita, fmt: fmtMoney }]), { first: ({payer:'Convênio',esp:'Especialidade',proc:'Procedimento',prof:'Profissional'})[dk] }); };
   $('pg_agenda').innerHTML = head('Agenda e atendimentos','Agendamento, ocupação, absenteísmo, pacientes e receita estimada, com números exatos por mês. Use o período acima e os filtros abaixo.') + `
-  <div class="card filters">${sel('prof','Profissional',uniq('prof'))}${sel('esp','Especialidade',uniq('esp'))}${sel('proc','Procedimento',uniq('proc'))}${sel('payer','Convênio',uniq('payer'))}<div class="field"><label>&nbsp;</label><button class="btn ghost" onclick="S.agf={};agReset();save();renderAgenda()">Limpar filtros</button></div><div class="field"><label>&nbsp;</label><button class="btn" onclick="smartImport('agenda')">Atualizar agenda</button></div></div>
+  <div class="card filters">${sel('prof','Profissional',uniq('prof'))}${sel('esp','Especialidade',uniq('esp'))}${sel('proc','Procedimento',uniq('proc'))}${sel('payer','Convênio',uniq('payer'))}${AgImp.periodFields()}<div class="field"><label>&nbsp;</label><button class="btn ghost" onclick="S.agf={};agReset();save();renderAgenda()">Limpar filtros</button></div><div class="field"><label>&nbsp;</label><button class="btn" onclick="smartImport('agenda')">Atualizar agenda</button></div></div>${AgImp.periodNote()}
   ${dq.length ? notice('warn', `<b>Qualidade do registro:</b><ul class="cons">${dq.map(x=>`<li>${x}</li>`).join('')}</ul>`) : ''}
   <div class="kpis">
     ${k('Agend.','Agendamentos do período', fmtNum(A.passados), 'Agendamentos com data já ocorrida (sem reagendados e ignorados).', 'neu', `+ ${fmtNum(A.K.agendado)} futuros`)}
@@ -4893,6 +4895,7 @@ const _fatGlosas0 = fatGlosas;
 fatGlosas = function(){ const h = _fatGlosas0(); if (!S.dem.length) return h;
   return `<div class="card smart"><div><h3>Extrato de recurso de glosa</h3><p>Importe a planilha do recurso enviado ou do retorno da operadora. As guias do extrato recebem valor recorrido, recuperado e status; as glosas do mesmo demonstrativo que ficaram fora do recurso são marcadas como "Não será recorrida".</p></div><div class="row" style="margin:0;margin-left:auto"><button class="btn pdf" onclick="recImport()">Importar extrato de recurso</button></div></div>` + h; };
 </script>
+<script src="agenda-import.js"></script>
 <script src="agenda-adv.js"></script>
 </body>
 </html>
