@@ -10,13 +10,14 @@
   const k2 = (sig, n, v, d, cls = 'neu') => `<div class="kpi ${cls}"><div class="kl"><span class="sig">${sig}</span>${n}</div><div class="kv">${v}</div><div class="kd">${d}</div></div>`;
   const slotMin = p => toNum(p.slot) || toNum(S.cad.clinic.slot) || 50;
   const win = () => windowMonths();
-  const rowsIn = ms => { const set = new Set(ms); const rg = typeof agRange === 'function' ? agRange() : null; return S.agenda.filter(r => set.has(r.d.slice(0, 7)) && (!rg || (r.d >= rg[0] && r.d <= rg[1]))); };
+  const rowsIn = ms => { const set = new Set(ms); const rg = typeof agRange === 'function' ? agRange() : null; const F = agFilter(); const UO = AgUn.mk();
+    return S.agenda.filter(r => set.has(r.d.slice(0, 7)) && (!rg || (r.d >= rg[0] && r.d <= rg[1])) && (!F.prof || r.prof === F.prof) && (!F.esp || r.esp === F.esp) && (!F.proc || r.proc === F.proc) && (!F.payer || r.payer === F.payer) && (!F.unit || UO(r) === F.unit)); };
 
   /* ---------- 1. Capacidade e ociosidade ---------- */
   function capGrid(ms) {   // capacidade por dia da semana x hora, somando o período
     const cap = {}; const rooms = toNum(S.cad.clinic.rooms);
     ms.forEach(m => monthDays(m).forEach(dt => { const w = dt.getDay(); const perH = {};
-      S.cad.profs.filter(p => p.active !== false).forEach(p => { const g = (p.grade || {})[w]; if (!g) return; const sl = slotMin(p); const sim = toNum(p.simult) || 1;
+      S.cad.profs.filter(p => p.active !== false && (!agFilter().unit || p.unit === agFilter().unit) && (!agFilter().prof || p.name === agFilter().prof) && (!agFilter().esp || p.esp === agFilter().esp)).forEach(p => { const g = (p.grade || {})[w]; if (!g) return; const sl = slotMin(p); const sim = toNum(p.simult) || 1;
         String(g).split(/[;,]+/).forEach(r => { const [a, b] = r.split('-').map(toMin); if (!isNum(a) || !isNum(b)) return; for (let s = a; s + sl <= b; s += sl) { const h = String(Math.floor(s / 60)).padStart(2, '0'); perH[h] = (perH[h] || 0) + sim; } }); });
       Object.entries(perH).forEach(([h, n]) => { let c = n; const sl = toNum(S.cad.clinic.slot) || 50; if (isNum(rooms) && rooms > 0) c = Math.min(n, rooms * Math.floor(60 / sl)); cap[w + '|' + h] = (cap[w + '|' + h] || 0) + c; }); }));
     return cap;

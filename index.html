@@ -133,6 +133,7 @@ tr.new td{background:#F6F1FF}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="cloud.js"></script>
+<script src="agenda-units.js"></script>
 <style>
 /* ===== Menu lateral (v3) ===== */
 :root{--hh:69px;--sw:256px}
@@ -671,7 +672,7 @@ const PDFW_B64='LyoqCiAqIEBsaWNzdGFydCBUaGUgZm9sbG93aW5nIGlzIHRoZSBlbnRpcmUgbGlj
    01 - Núcleo: campos, estado, armazenamento e utilitários
    ========================================================= */
 'use strict';
-const APP_VERSION = '3.0.0-beta.4';
+const APP_VERSION = '3.0.0-beta.5';
 const STORE_KEY = 'eloga_painel_financeiro_v1';
 const $ = id => document.getElementById(id);
 
@@ -2853,7 +2854,7 @@ function detectProfile(headers, expect){ const nh = new Set(headers.map(norm)); 
 function resolveMap(map, headers){ const out = {}; for (const [k, h] of Object.entries(map)) { const f = headers.find(x => norm(x) === norm(h)); if (f) out[k] = f; } return out; }
 
 /* ---------- Classificação de status ---------- */
-const ST_KINDS = [['realizado','Realizado / atendido'],['falta','Falta do paciente (sem cobrança)'],['falta_cob','Falta do paciente com cobrança da sessão'],['canc_pac','Cancelado pelo paciente'],['canc_clin','Cancelado pela clínica'],['aus_prof','Ausência do profissional'],['reagendado','Reagendado / remarcado'],['sembaixa','Sem baixa (pendência de registro)'],['agendado','Agendado (ainda vai acontecer)'],['ignorar','Ignorar (bloqueio, teste, duplicado)']];
+const ST_KINDS = [['realizado','Realizado / atendido'],['falta','Falta do paciente (não cobrada)'],['falta_cob','Falta do paciente (cobrada)'],['canc_pac','Cancelado pelo paciente'],['canc_clin','Cancelado pela clínica'],['aus_prof','Ausência do profissional'],['reagendado','Reagendado / remarcado'],['sembaixa','Sem baixa (pendência de registro)'],['agendado','Agendado (ainda vai acontecer)'],['ignorar','Ignorar (bloqueio, teste, duplicado)']];
 const STK = Object.fromEntries(ST_KINDS);
 const KCOL = { realizado:PAL.petro, falta:PAL.bad, falta_cob:'#F08A8D', canc_pac:PAL.grey, canc_clin:'#8E5BD0', aus_prof:PAL.roxo, reagendado:PAL.teal, sembaixa:PAL.warn, agendado:PAL.lilas };
 const KSHORT = { realizado:'Realizados', falta:'Faltas s/ cobrança', falta_cob:'Faltas c/ cobrança', canc_pac:'Cancel. paciente', canc_clin:'Cancel. clínica', aus_prof:'Ausência profissional', reagendado:'Reagendados', sembaixa:'Sem baixa', agendado:'Agendados futuros' };
@@ -3021,19 +3022,19 @@ function resetAll(){ _pidx = null; _cut = null; if (typeof agReset === 'function
 
 /* ---------- Motor da agenda ---------- */
 let _agCache = null; function agReset(){ _agCache = null; }
-function agFilter(){ S.agf = S.agf || {}; const f = Object.assign({ prof:'', esp:'', proc:'', payer:'', from:'', to:'' }, S.agf); if (typeof PAGE === 'undefined' || PAGE !== 'agenda') { f.from = ''; f.to = ''; } return f; }
+function agFilter(){ S.agf = S.agf || {}; const f = Object.assign({ prof:'', esp:'', proc:'', payer:'', unit:'', from:'', to:'' }, S.agf); if (typeof PAGE === 'undefined' || PAGE !== 'agenda') { f.from = ''; f.to = ''; } return f; }
 function agRange(){ const f = agFilter(); return (f.from || f.to) ? [f.from || '0000-00-00', f.to || '9999-12-31'] : null; }
 function agRangeMonths(rg){ const all = [...new Set(S.agenda.map(r => r.d.slice(0,7)))].sort(); return all.filter(m => m >= rg[0].slice(0,7) && m <= rg[1].slice(0,7)); }
 const emptyK = () => Object.fromEntries(ST_KINDS.map(([k]) => [k, 0]));
 const pastN = o => PAST_KINDS.reduce((s,k) => s + (o[k]||0), 0);
 function agStats(){
   const F = agFilter(); const RG = agRange(); const ms = RG ? (agRangeMonths(RG).length ? agRangeMonths(RG) : windowMonths()) : windowMonths(); const msSet = new Set(ms);
-  const key = JSON.stringify([F, ms, S.agenda.length, S.cad.statusMap, S.cad.clinic, S.cad.cfg.holidays, S.cad.profs.map(p=>[p.name,p.slot,p.grade,p.active,p.esp,p.simult]), S.cad.table.length, S.cad.salas, S.cad.pacotes]);
+  const key = JSON.stringify([F, ms, S.agenda.length, S.cad.statusMap, S.cad.clinic, S.cad.cfg.holidays, S.cad.profs.map(p=>[p.name,p.slot,p.grade,p.active,p.esp,p.simult,p.unit]), S.cad.units, S.cad.table.length, S.cad.salas, S.cad.pacotes]);
   if (_agCache && _agCache.key === key) return _agCache.v;
-  const dimOK = r => (!F.prof || r.prof === F.prof) && (!F.esp || r.esp === F.esp) && (!F.proc || r.proc === F.proc) && (!F.payer || r.payer === F.payer);
+  const UO = AgUn.mk(); const dimOK = r => (!F.prof || r.prof === F.prof) && (!F.esp || r.esp === F.esp) && (!F.proc || r.proc === F.proc) && (!F.payer || r.payer === F.payer) && (!F.unit || UO(r) === F.unit);
   const base = S.agenda.filter(dimOK); const slotOf = {}; S.cad.profs.forEach(p => slotOf[p.name] = toNum(p.slot));
   const K = emptyK(); const M = Object.fromEntries(ms.map(m => [m, Object.assign(emptyK(), { receita:0, eleg:0, pac:new Set(), cap:null, capRoom:null, horas:0 })]));
-  const dims = { prof:{}, esp:{}, proc:{}, payer:{} }; const heat = {}; let receita = 0, semPreco = 0; const antec = []; const pacs = new Set();
+  const dims = { prof:{}, esp:{}, proc:{}, payer:{}, unit:{} }; const heat = {}; let receita = 0, semPreco = 0; const antec = []; const pacs = new Set();
   const pm = {}; const allMonths = new Set();
   for (const r of base) {
     const k = kindOf(r); if (k === 'ignorar') continue; const m = r.d.slice(0,7); allMonths.add(m);
@@ -3045,7 +3046,7 @@ function agStats(){
     const eleg = k === 'realizado' || k === 'falta_cob';
     let price = null; if (eleg) { price = pkgPrice(r); if (price === undefined) price = priceOf(r); mo.eleg++; if (isNum(price)) { receita += price; mo.receita += price; } else semPreco++; }
     if (k === 'realizado') { pacs.add(r.p); mo.pac.add(r.p); mo.horas += (slotOf[r.prof] || toNum(S.cad.clinic.slot) || 50) / 60; if (r.bk) { const a = (toDate(r.d) - toDate(r.bk))/864e5; if (a >= 0 && a < 400) antec.push(a); } }
-    for (const dk of ['prof','esp','proc','payer']) { const nm = r[dk] || 'Não informado'; const g = (dims[dk][nm] = dims[dk][nm] || Object.assign(emptyK(), { receita:0, pac:new Set(), bm:{} })); g[k]++; if (eleg) g.receita += price || 0; if (k === 'realizado') g.pac.add(r.p);
+    for (const dk of (AgUn.has() ? ['prof','esp','proc','payer','unit'] : ['prof','esp','proc','payer'])) { const nm = (dk === 'unit' ? UO(r) : r[dk]) || 'Não informado'; const g = (dims[dk][nm] = dims[dk][nm] || Object.assign(emptyK(), { receita:0, pac:new Set(), bm:{} })); g[k]++; if (eleg) g.receita += price || 0; if (k === 'realizado') g.pac.add(r.p);
       const gm = (g.bm[m] = g.bm[m] || Object.assign(emptyK(), { receita:0 })); gm[k]++; if (eleg) gm.receita += price || 0; }
     if (k !== 'agendado' && r.h) { const w = toDate(r.d).getDay(); const h = r.h.slice(0,2); const c = (heat[w+'|'+h] = heat[w+'|'+h] || { ag:0, real:0 }); c.ag++; if (k === 'realizado') c.real++; }
   }
@@ -3057,10 +3058,10 @@ function agStats(){
       if (first === m && m !== firstM) o.novos++;
       if (m <= cutM && m !== firstM && pt.m.has(prev) && !pt.m.has(m)) o.evad++;
       if (pt.m.has(m) && !pt.m.has(prev) && first < prev) o.ret++; }); });
-  const profsSel = S.cad.profs.filter(p => p.active !== false && (!F.prof || p.name === F.prof) && (!F.esp || p.esp === F.esp));
+  const profsSel = S.cad.profs.filter(p => p.active !== false && (!F.prof || p.name === F.prof) && (!F.esp || p.esp === F.esp) && (!F.unit || p.unit === F.unit));
   const capOK = !F.proc && !F.payer; const capProf = {}; let capTot = null, capRoomTot = null;
   if (capOK) ms.forEach(m => { let c = 0, any = false; profsSel.forEach(p => { const v = profCapacity(p, m); if (isNum(v)) { any = true; c += v; capProf[p.name] = (capProf[p.name]||0) + v; } }); M[m].cap = any ? c : null; if (any) capTot = (capTot||0) + c;
-    if (!F.prof && (!F.esp || (S.cad.salas||[]).length)) { const rc = roomCapacity(m, F.esp); M[m].capRoom = rc; if (isNum(rc)) capRoomTot = (capRoomTot||0) + rc; } });
+    if (!F.prof && (!F.esp || (S.cad.salas||[]).length)) { const rc = F.unit ? AgUn.roomCap(m, F.unit) : (AgUn.roomCapAll(m, F.esp) ?? roomCapacity(m, F.esp)); M[m].capRoom = rc; if (isNum(rc)) capRoomTot = (capRoomTot||0) + rc; } });
   const passados = pastN(K); const faltas = K.falta + K.falta_cob;
   const sumP = k => ms.reduce((s,m) => s + P[m][k], 0);
   const v = { F, ms, K, M, P, dims, heat, capTot, capRoomTot, capProf, capOK, receita, semPreco, pacientes: pacs.size, passados, faltas, cut: dataCut(),
@@ -3126,10 +3127,10 @@ const AG_NOTES = {
 /* ---------- Tela: Cadastros ---------- */
 let CADTAB = 'payers';
 function renderCad(){
-  const tabs = [['payers','Convênios'],['tabela','Tabela de procedimentos'],['clinica','Funcionamento e pagamentos'],['profs','Profissionais e grade'],['pacotes','Pacotes de convênio'],['custos','Custos e margem'],['repasse','Repasse'],['status','Status da agenda']];
+  const tabs = [['payers','Convênios'],['tabela','Tabela de procedimentos'],['clinica','Funcionamento e pagamentos'],['profs','Profissionais e grade'],['pacotes','Pacotes de convênio'],['custos','Custos e margem'],['repasse','Repasse'],['status','Status da agenda'],['unidades','Unidades']];
   $('pg_cad').innerHTML = head('Cadastros do cliente','Tudo o que é específico deste cliente: convênios, preços, horário de funcionamento, profissionais, regras de repasse e significado dos status da agenda.') +
     `<div class="subtabs">${tabs.map(([k,l]) => `<button class="${CADTAB===k?'active':''}" onclick="CADTAB='${k}';renderCad()">${l}${k==='status' && S.agenda.length && !S.cad.statusOK ? ' <span class="chip warn">confirmar</span>':''}</button>`).join('')}</div><div id="cadWork"></div><div id="cadBody"></div>`;
-  ({ payers:cadPayers, tabela:cadTabela, clinica:cadClinica, profs:cadProfs, pacotes:cadPacotes, custos:cadCustos, repasse:cadRepasse, status:cadStatus })[CADTAB]();
+  ({ payers:cadPayers, tabela:cadTabela, clinica:cadClinica, profs:cadProfs, pacotes:cadPacotes, custos:cadCustos, repasse:cadRepasse, status:cadStatus, unidades:cadUnidades })[CADTAB]();
 }
 function cset(path, v, rer){ const ks = path.split('.'); let o = S; ks.slice(0,-1).forEach(k => o = o[k]); o[ks[ks.length-1]] = v; resetAll(); if (rer) renderCad(); }
 function cadPayers(){
@@ -3172,8 +3173,8 @@ function cadProfs(){
   $('cadBody').innerHTML = `<div class="card"><div class="chead"><h3>Profissionais e grade de atendimento</h3><div class="row" style="margin:0"><button class="btn sm ghost" onclick="S.cad.profs.forEach(p=>{if(!Object.values(p.grade||{}).some(v=>v))suggestGrade(p)});resetAll();renderCad()">Sugerir grades vazias pelo histórico</button><button class="btn sm" onclick="S.cad.profs.push({name:'Novo profissional',esp:'',cbo:'',reg:'',slot:S.cad.clinic.slot||50,simult:1,grade:{},active:true,rep:{}});save();renderCad()">+ Profissional</button></div></div>
     ${kitCard()}
     ${notice('', 'Informe os horários de cada dia no formato <b>08:00-12:00; 13:00-18:00</b> (o intervalo fica fora). <b>"= clínica"</b> copia o horário de funcionamento para o profissional.')}
-    <div class="tscroll"><table class="tbl profs"><thead><tr><th>Profissional</th><th>Especialidade</th><th title="Precisa coincidir com o cadastro na operadora para evitar glosa">CBO</th><th>Min.</th><th title="Quantos pacientes o profissional atende ao mesmo tempo (ex.: atendimento em dupla ou grupo)">Simult.</th>${[1,2,3,4,5,6].map(d=>`<th>${WD[d]}</th>`).join('')}<th>Capac. ${monthLabel(ym)}</th><th>Ativo</th><th></th></tr></thead><tbody>
-    ${P.map((p,i) => `<tr><td><input class="cin" value="${esc(p.name)}" onchange="cset('cad.profs.${i}.name',this.value)"></td><td><input class="cin" value="${esc(p.esp)}" onchange="cset('cad.profs.${i}.esp',this.value)"></td><td><input class="cin xs" value="${esc(p.cbo)}" onchange="cset('cad.profs.${i}.cbo',this.value)"></td>
+    <div class="tscroll"><table class="tbl profs"><thead><tr><th>Profissional</th><th>Especialidade</th>${AgUn.th()}<th title="Precisa coincidir com o cadastro na operadora para evitar glosa">CBO</th><th>Min.</th><th title="Quantos pacientes o profissional atende ao mesmo tempo (ex.: atendimento em dupla ou grupo)">Simult.</th>${[1,2,3,4,5,6].map(d=>`<th>${WD[d]}</th>`).join('')}<th>Capac. ${monthLabel(ym)}</th><th>Ativo</th><th></th></tr></thead><tbody>
+    ${P.map((p,i) => `<tr><td><input class="cin" value="${esc(p.name)}" onchange="cset('cad.profs.${i}.name',this.value)"></td><td><input class="cin" value="${esc(p.esp)}" onchange="cset('cad.profs.${i}.esp',this.value)"></td>${AgUn.td(i,p)}<td><input class="cin xs" value="${esc(p.cbo)}" onchange="cset('cad.profs.${i}.cbo',this.value)"></td>
       <td><input class="cin xs num" value="${esc(p.slot)}" onchange="cset('cad.profs.${i}.slot',toNum(this.value)||50,1)"></td><td><input class="cin xs num" value="${esc(p.simult||1)}" onchange="cset('cad.profs.${i}.simult',toNum(this.value)||1,1)"></td>
       ${[1,2,3,4,5,6].map(d => `<td><input class="cin grade" value="${esc((p.grade||{})[d]||'')}" placeholder="—" onchange="S.cad.profs[${i}].grade=S.cad.profs[${i}].grade||{};S.cad.profs[${i}].grade[${d}]=this.value.trim();resetAll();renderCad()"></td>`).join('')}
       <td class="num">${fmtNum(profCapacity(p, ym))}</td><td><input type="checkbox" ${p.active!==false?'checked':''} onchange="cset('cad.profs.${i}.active',this.checked)"></td><td class="acts"><button class="lnk" style="color:var(--roxo)" onclick="S.cad.profs[${i}].grade=Object.fromEntries([1,2,3,4,5,6].map(w=>[w,clinicRanges(w)]));resetAll();renderCad()">= clínica</button> <button class="lnk" onclick="S.cad.profs.splice(${i},1);resetAll();renderCad()">remover</button></td></tr>`).join('') || '<tr><td colspan="14" class="muted">Os profissionais são criados ao importar a agenda ou o Kit.</td></tr>'}
@@ -3204,7 +3205,7 @@ function renderAgenda(){
   const semGrade = S.cad.profs.filter(p => p.active !== false && !Object.values(p.grade||{}).some(v=>v)); if (semGrade.length) dq.push(`<b>${semGrade.length} profissional(is) sem grade</b>: ${semGrade.map(p=>esc(p.name)).join(', ')}.`);
   if (!A.K.falta && !A.K.falta_cob && A.passados > 200) dq.push('Nenhuma <b>falta</b> no período: confirme se a clínica registra faltas no sistema.');
   const P = A.P;
-  const dimTabs = [['prof','Profissional'],['esp','Especialidade'],['proc','Procedimento'],['payer','Convênio']];
+  const dimTabs = [['prof','Profissional'],['esp','Especialidade'],['proc','Procedimento'],['payer','Convênio']].concat(AgUn.has() ? [['unit','Unidade']] : []);
   const dimRows = Object.entries(A.dims[AGDIM]).map(([n,g]) => ({ n, ...g, pas: pastN(g) })).filter(g => g.pas).sort((a,b)=>b.realizado-a.realizado);
   const kinds = ST_KINDS.map(x=>x[0]).filter(kk => kk !== 'ignorar' && ms.some(m => A.M[m][kk]));
   const dimMonthTable = (dk, metric) => { const names = Object.entries(A.dims[dk]).sort((a,b)=> metric==='receita' ? b[1].receita - a[1].receita : b[1].realizado - a[1].realizado).map(x=>x[0]);
@@ -4896,6 +4897,7 @@ fatGlosas = function(){ const h = _fatGlosas0(); if (!S.dem.length) return h;
   return `<div class="card smart"><div><h3>Extrato de recurso de glosa</h3><p>Importe a planilha do recurso enviado ou do retorno da operadora. As guias do extrato recebem valor recorrido, recuperado e status; as glosas do mesmo demonstrativo que ficaram fora do recurso são marcadas como "Não será recorrida".</p></div><div class="row" style="margin:0;margin-left:auto"><button class="btn pdf" onclick="recImport()">Importar extrato de recurso</button></div></div>` + h; };
 </script>
 <script src="agenda-import.js"></script>
+<script src="agenda-export.js"></script>
 <script src="agenda-adv.js"></script>
 </body>
 </html>

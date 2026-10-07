@@ -30,6 +30,8 @@
     agendado: 'Ainda vai acontecer. Fica fora das taxas até ser baixado.',
     ignorar: 'Bloqueio, teste ou duplicado. Não entra em nenhum indicador.'
   };
+  if (!KINDS.agenda.fields.some(f => f.k === 'unit')) KINDS.agenda.fields.push({ k: 'unit', l: 'Unidade (se o cliente tiver mais de uma)', syn: ['unidade', 'filial', 'local', 'sede'] });
+  FIELD_HELP.unit = 'Unidade onde o atendimento ocorreu. Permite analisar cada unidade separadamente. Se não houver, a unidade vem do cadastro do profissional.';
   const KOPT = () => ST_KINDS.map(([v, l]) => [v, l]);
 
   const ex = (v) => esc(String(v == null ? '' : v).slice(0, 38));
@@ -43,6 +45,7 @@
       const bk = toDate(G(r, 'booked'));
       recs.push({ d: isoLocal(d), h: String(G(r, 'time')).slice(0, 5), prof, esp: String(G(r, 'esp')).trim(), payer: String(G(r, 'payer')).trim() || 'Não informado',
         code: String(G(r, 'code')).replace(/\D/g, ''), proc: String(G(r, 'proc')).trim(), st: String(G(r, 'status')).trim(), bk: bk ? isoLocal(bk) : '', p: patKey(G(r, 'pid'), G(r, 'name')), n: nameKey(G(r, 'name')) });
+      const u = String(G(r, 'unit')).trim(); if (u) recs[recs.length - 1].u = u;
     }
     SIMP.out = recs; SIMP.bad = bad;
     const dates = recs.map(r => r.d).sort(); SIMP.range = [dates[0], dates[dates.length - 1]];
@@ -88,6 +91,7 @@
     const [a, b] = SIMP.range; const stmap = SIMP.stmap, cut = SIMP.cut, out = SIMP.out;
     S.agenda = S.agenda.filter(r => r.d < a || r.d > b).concat(out).sort((x, y) => x.d < y.d ? -1 : x.d > y.d ? 1 : (x.h < y.h ? -1 : 1));
     syncPayers(out.map(r => r.payer)); _cut = null; syncProfs();
+    [...new Set(out.map(r => r.u).filter(Boolean))].forEach(n => AgUn.add(n));
     // a classificação escolhida vale para os mesmos nomes de status na agenda inteira
     out.forEach(r => { const chosen = stmap[keyOf(r, cut)]; if (chosen) S.cad.statusMap[stKey(r)] = chosen; });
     new Set(S.agenda.map(stKey)).forEach(k => { if (!(k in S.cad.statusMap)) S.cad.statusMap[k] = defaultKind(k); });
@@ -103,13 +107,14 @@
   function weeks() { return [...new Set(S.agenda.map(r => weekStart(r.d)))].sort(); }
   function periodFields() {
     const f = agFilter(); const ws = weeks(); const cur = (f.from && f.to && weekStart(f.from) === f.from && addDays(f.from, 6) === f.to) ? f.from : '';
-    return `<div class="field"><label>Semana (seg a dom)</label><select onchange="AgImp.setWeek(this.value)"><option value="">Todas</option>${ws.slice().reverse().map(w => `<option value="${w}" ${cur === w ? 'selected' : ''}>${br(w)} a ${br(addDays(w, 6))}</option>`).join('')}</select></div>
+    const un = AgUn.has() ? `<div class="field"><label>Unidade</label><select onchange="AgImp.setUnit(this.value)"><option value="">Todas</option>${AgUn.list().map(n => `<option ${f.unit === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>` : '';
+    return un + `<div class="field"><label>Semana (seg a dom)</label><select onchange="AgImp.setWeek(this.value)"><option value="">Todas</option>${ws.slice().reverse().map(w => `<option value="${w}" ${cur === w ? 'selected' : ''}>${br(w)} a ${br(addDays(w, 6))}</option>`).join('')}</select></div>
       <div class="field"><label>De</label><input type="date" value="${esc(f.from)}" onchange="AgImp.setRange('from',this.value)"></div>
       <div class="field"><label>Até</label><input type="date" value="${esc(f.to)}" onchange="AgImp.setRange('to',this.value)"></div>`;
   }
   function periodNote() {
-    const f = agFilter(); if (!f.from && !f.to) return '';
-    return notice('', `<b>Período filtrado:</b> ${f.from ? toDate(f.from).toLocaleDateString('pt-BR') : 'início'} a ${f.to ? toDate(f.to).toLocaleDateString('pt-BR') : 'fim'}. Indicadores e capacidade consideram só estes dias (feriados e grade de cada profissional respeitados). Use "Limpar filtros" para voltar ao período mensal.`);
+    const f = agFilter(); const bar = `<div class="row end" style="margin:0 0 10px"><button class="btn ghost" onclick="AgExp.xlsx()">Exportar Excel (com gráficos)</button><button class="btn pdf" onclick="AgExp.pdf()">Exportar PDF (com gráficos)</button></div>`; if (!f.from && !f.to) return bar;
+    return bar + notice('', `<b>Período filtrado:</b> ${f.from ? toDate(f.from).toLocaleDateString('pt-BR') : 'início'} a ${f.to ? toDate(f.to).toLocaleDateString('pt-BR') : 'fim'}. Indicadores e capacidade consideram só estes dias (feriados e grade de cada profissional respeitados). Use "Limpar filtros" para voltar ao período mensal.`);
   }
   const apply = () => { agReset(); save(); renderAgenda(); };
 
@@ -117,6 +122,7 @@
     setMap(k, v) { if (v) SIMP.map[k] = v; else delete SIMP.map[k]; previewAgenda(); },
     setStatus(k, v) { SIMP.stmap[k] = v; previewAgenda(); },
     setWeek(w) { S.agf = Object.assign(S.agf || {}, w ? { from: w, to: addDays(w, 6) } : { from: '', to: '' }); apply(); },
+    setUnit(v) { S.agf = Object.assign(S.agf || {}, { unit: v }); apply(); },
     setRange(k, v) { S.agf = Object.assign(S.agf || {}, { [k]: v }); apply(); },
     periodFields, periodNote
   };
