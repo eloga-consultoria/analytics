@@ -116,7 +116,17 @@
       ]);
       for (const r of [cl, cm, em]) if (r.error) throw r.error;
       const parts = {};
-      for (const r of cm.data) { (parts[r.client_id] = parts[r.client_id] || {})[r.module] = r.data; this.known[r.client_id + '|' + r.module] = hash(JSON.stringify(r.data)); this.bump(r.updated_at); }
+      const pieces = {};
+      for (const r of cm.data) {
+        this.bump(r.updated_at);
+        const i = r.module.indexOf('~');
+        if (i < 0) { (parts[r.client_id] = parts[r.client_id] || {})[r.module] = r.data; this.known[r.client_id + '|' + r.module] = hash(JSON.stringify(r.data)); continue; }
+        const base = r.module.slice(0, i), k = r.client_id + '|' + base; (pieces[k] = pieces[k] || { c: r.client_id, m: base, p: [] }).p[+r.module.slice(i + 1)] = r.data && r.data.s;
+      }
+      for (const [k, o] of Object.entries(pieces)) {
+        if (o.p.some(x => typeof x !== 'string')) { console.warn('módulo incompleto', k); continue; }
+        const txt = o.p.join(''); try { (parts[o.c] = parts[o.c] || {})[o.m] = JSON.parse(txt); this.known[k] = hash(txt); } catch (e) { console.warn('módulo ilegível', k, e); }
+      }
       const clients = {};
       for (const c of cl.data) {
         const p = parts[c.id]; this.knownClients.add(c.id); this.bump(c.updated_at);
@@ -152,9 +162,12 @@
         for (const [m, d] of [['settings', DB.settings || {}], ['eloga', DB.eloga || {}]]) add('eloga_modules', { module: m, data: d, updated_at: now }, 'eloga|' + m, JSON.stringify(d));
         // clientes de clientes (nome) atualizados junto do core
         for (const j of jobs) if (j.table === 'client_modules' && j.row.module === 'core') { const c = DB.clients[j.row.client_id]; await this.up('clients', { id: c.id, name: nameOf(c), updated_at: now }); this.knownClients.add(c.id); }
+        let done = 0; const total = jobs.length;
         for (const j of jobs) {
+          done++; if (total > 3) this.badge(`Salvando ${done}/${total}...`, '');
           if (j.table === 'clients') { await this.up('clients', j.row); this.knownClients.add(j.row.id); continue; }
-          await this.up(j.table, j.row); this.known[j.key] = j.h;
+          if (j.table === 'client_modules') await this.upModule(j.row); else await this.up(j.table, j.row);
+          this.known[j.key] = j.h;
         }
         if (ids.size) for (const id of [...this.knownClients]) if (!ids.has(id) && !Object.values(DB.clients).some(c => c.id === id && isBlank(c))) {
           const { error } = await sb.from('clients').delete().eq('id', id); if (error) throw error; this.knownClients.delete(id);
@@ -162,9 +175,21 @@
         }
         this.bump(now); this.badge('Salvo na nuvem', 'ok');
       } catch (e) {
-        console.warn('nuvem', e); this.badge('Não salvo: verifique a conexão', 'err');
+        console.warn('nuvem', e); this.lastErr = (e && (e.message || e.details || e.code)) || String(e); this.badge('Não salvo: ' + String(this.lastErr).slice(0, 80), 'err');
         if (e && (e.code === 'PGRST301' || /JWT|row-level/i.test(e.message || ''))) this.badge('Sessão expirou: entre novamente', 'err');
       } finally { this.pushing = false; if (this.pending) { this.pending = false; this.push(); } }
+    },
+    /* módulos grandes são gravados em pedaços (evita limite de tempo/tamanho da API) */
+    async upModule(row) {
+      const txt = JSON.stringify(row.data), SIZE = 350000;
+      const del = async (like) => { const { error } = await sb.from('client_modules').delete().eq('client_id', row.client_id).like('module', like); if (error) throw error; };
+      if (txt.length <= SIZE) { await this.up('client_modules', row); await del(row.module + '~%'); return; }
+      const n = Math.ceil(txt.length / SIZE);
+      for (let i = 0; i < n; i++) await this.up('client_modules', { client_id: row.client_id, module: row.module + '~' + i, data: { s: txt.slice(i * SIZE, (i + 1) * SIZE) }, updated_at: row.updated_at });
+      const { error } = await sb.from('client_modules').delete().eq('client_id', row.client_id).eq('module', row.module); if (error) throw error;
+      const ls = await sb.from('client_modules').select('module').eq('client_id', row.client_id).like('module', row.module + '~%'); if (ls.error) throw ls.error;
+      const stale = ls.data.map(x => x.module).filter(m => +m.slice(m.indexOf('~') + 1) >= n);
+      if (stale.length) { const { error: e2 } = await sb.from('client_modules').delete().eq('client_id', row.client_id).in('module', stale); if (e2) throw e2; }
     },
     async up(table, row) {
       const conflict = table === 'clients' ? 'id' : table === 'client_modules' ? 'client_id,module' : 'module';
