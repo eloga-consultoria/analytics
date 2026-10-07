@@ -54,7 +54,7 @@
       return new Promise(res => {
         const b = this.el(); let signup = false;
         const draw = (err) => {
-          b.innerHTML = `<div class="tt">ELOGA ANALYTICS</div><h2>${signup ? 'Primeiro acesso' : 'Entrar'}</h2><p>${signup ? 'Crie a conta de administradora. Só o primeiro cadastro recebe acesso.' : 'Acesso restrito à gestão ELOGA.'}</p><label>E-mail</label><input id="cgE" type="email" autocomplete="username"><label>Senha</label><input id="cgP" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}"><div class="er" id="cgR">${err || ''}</div><button id="cgB">${signup ? 'Criar conta' : 'Entrar'}</button><button class="lk" id="cgT">${signup ? 'Já tenho conta' : 'Primeiro acesso (criar conta)'}</button>`;
+          b.innerHTML = `<div class="tt">ELOGA ANALYTICS</div><h2>${signup ? 'Primeiro acesso' : 'Entrar'}</h2><p>${signup ? 'Crie a conta de administradora. Só o primeiro cadastro recebe acesso.' : 'Acesso restrito à gestão ELOGA.'}</p><label>E-mail</label><input id="cgE" type="email" autocomplete="username"><label>Senha</label><input id="cgP" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}"><div class="er" id="cgR">${err || ''}</div><button id="cgB">${signup ? 'Criar conta' : 'Entrar'}</button><button class="lk" id="cgT">${signup ? 'Já criei minha conta: ir para Entrar' : 'Primeiro acesso (criar conta)'}</button>`;
           b.querySelector('#cgT').onclick = () => { signup = !signup; draw(); };
           const go = async () => {
             const email = b.querySelector('#cgE').value.trim(), pw = b.querySelector('#cgP').value, r = b.querySelector('#cgR');
@@ -63,7 +63,7 @@
             if (signup) {
               const { data, error } = await sb.auth.signUp({ email, password: pw });
               if (error) { r.textContent = error.message; return; }
-              if (!data.session) { r.textContent = 'Conta criada. Confirme pelo e-mail recebido e depois entre.'; signup = false; setTimeout(() => draw('Conta criada. Confirme pelo link enviado ao seu e-mail e depois entre.'), 50); return; }
+              if (!data.session) { signup = false; draw('Conta registrada. Se você recebeu o e-mail, confirme pelo link (mesmo que a página dê erro). Depois digite e-mail e senha aqui e toque em ENTRAR: o QR code aparece na tela seguinte.'); return; }
               return res(data.session);
             }
             const { data, error } = await sb.auth.signInWithPassword({ email, password: pw });
