@@ -23,6 +23,20 @@
     set(i, k, v) { U()[i][k] = v; resetAll(); renderCad(); },
     addPrompt() { const el = document.getElementById('unNew'); if (AgUn.add(el.value)) { resetAll(); renderCad(); } else toast('Informe um nome de unidade novo.', 'bad'); }
   };
+
+  /* ---------- Regras por status: fatura ao convênio / cobra do paciente / repassa ao profissional ---------- */
+  const KIND_DEF = k => (k === 'realizado' || k === 'falta_cob');
+  window.stFlags = function (r) {
+    const key = stKey(r); const o = (S.cad.statusFlags || {})[key] || {}; const kind = kindOf(r); const d = KIND_DEF(kind);
+    return { fat: o.fat === undefined ? d : !!o.fat, cobra: o.cobra === undefined ? d : !!o.cobra, rep: o.rep };
+  };
+  window.billable = function (r) { const f = stFlags(r); return !!(f.fat || f.cobra); };
+  window.stFlagCell = function (key, f) {
+    const kind = S.cad.statusMap[key] || defaultKind(key); const o = (S.cad.statusFlags || {})[key] || {};
+    const v = o[f] === undefined ? KIND_DEF(kind) : !!o[f]; const custom = o[f] !== undefined;
+    return `<select onchange='stSetFlag(${JSON.stringify(key).replace(/'/g, '&#39;')},"${f}",this.value)' style="${custom ? 'font-weight:700' : ''}"><option value="1" ${v ? 'selected' : ''}>Sim</option><option value="0" ${!v ? 'selected' : ''}>Não</option></select>`;
+  };
+  window.stSetFlag = function (key, f, v) { S.cad.statusFlags = S.cad.statusFlags || {}; (S.cad.statusFlags[key] = S.cad.statusFlags[key] || {})[f] = v === '1'; resetAll(); renderCad(); };
   window.AgUn = AgUn;
   window.cadUnidades = function () {
     const un = U(); const uo = AgUn.mk(); const cnt = {}; S.agenda.forEach(r => { const k = uo(r); cnt[k] = (cnt[k] || 0) + 1; });

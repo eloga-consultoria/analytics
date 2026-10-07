@@ -66,7 +66,7 @@
     const reoc = f => { const b = busy[slotKey(f)]; return b && [...b].some(p => p !== f.p); };
     const perM = {}; ms.forEach(m => perM[m] = { lib: 0, reoc: 0, risco: 0, riscoN: 0, cob: 0 });
     freed.forEach(f => { const m = f.d.slice(0, 7); const o = perM[m]; if (!o) return; o.lib++; if (reoc(f)) o.reoc++; });
-    rows.forEach(r => { const k = kindOf(r), m = r.d.slice(0, 7); if (k === 'falta') { const pr = priceOf(r); perM[m].riscoN++; if (isNum(pr)) perM[m].risco += pr; } if (k === 'falta_cob') perM[m].cob++; });
+    rows.forEach(r => { const k = kindOf(r), m = r.d.slice(0, 7); if (k === 'falta' && !billable(r)) { const pr = priceOf(r); perM[m].riscoN++; if (isNum(pr)) perM[m].risco += pr; } if (k === 'falta_cob') perM[m].cob++; });
     const tl = ms.reduce((s, m) => s + perM[m].lib, 0), tr = ms.reduce((s, m) => s + perM[m].reoc, 0), rr = ms.reduce((s, m) => s + perM[m].risco, 0), rn = ms.reduce((s, m) => s + perM[m].riscoN, 0);
     const byProf = {}; freed.forEach(f => { const o = (byProf[f.prof || 'Não informado'] = byProf[f.prof || 'Não informado'] || { lib: 0, reoc: 0, falta: 0, cp: 0, cc: 0, ap: 0 }); o.lib++; if (reoc(f)) o.reoc++; const k = kindOf(f); if (k === 'falta' || k === 'falta_cob') o.falta++; if (k === 'canc_pac') o.cp++; if (k === 'canc_clin') o.cc++; if (k === 'aus_prof') o.ap++; });
     const tbl = Object.entries(byProf).sort((a, b) => b[1].lib - a[1].lib);

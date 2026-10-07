@@ -16,7 +16,7 @@
     proc: 'Procedimento realizado. Busca o valor na tabela de preços.',
     code: 'Código TUSS do procedimento. Ajuda a achar o preço quando o nome do procedimento varia.',
     status: 'Situação do agendamento no sistema da clínica (Atendido, Faltou, Cancelado...). Todas as taxas dependem dele. Obrigatório.',
-    booked: 'Dia em que o horário foi marcado. Gera a antecedência média de agendamento.'
+    booked: 'Dia em que o horário foi marcado. Não entra nos indicadores (agendamentos recorrentes distorcem a antecedência); pode ficar em branco.'
   };
   const KIND_HELP = {
     realizado: 'Atendimento que aconteceu. Entra em comparecimento, produtividade e receita estimada.',
