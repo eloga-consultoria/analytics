@@ -133,16 +133,43 @@ tr.new td{background:#F6F1FF}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="cloud.js"></script>
+<style>
+/* ===== Menu lateral (v3) ===== */
+:root{--hh:69px;--sw:256px}
+.nav{position:fixed;top:var(--hh);left:0;bottom:0;width:var(--sw);display:block;overflow-y:auto;overflow-x:hidden;padding:10px 10px 30px;border-bottom:0;border-right:1px solid var(--line);background:#fff;z-index:25}
+.nav .ng{margin:6px 0 2px}
+.nav .ngh{width:100%;display:flex;align-items:center;gap:8px;text-align:left;white-space:normal;background:transparent;border:0;border-radius:8px;padding:9px 10px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:800;color:var(--petro);cursor:pointer;font-family:inherit}
+.nav .ngh:hover{background:var(--bg)}
+.nav .ngh i{font-style:normal;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--petro);color:#fff;font-size:10.5px;flex:none}
+.nav .ngh b{margin-left:auto;transition:transform .15s;font-size:10px;color:var(--muted)}
+.nav .ng.closed .ngh b{transform:rotate(-90deg)}
+.nav .ng.closed .ngi{display:none}
+.nav .ngi button,.nav .ngi .soon{display:block;width:100%;text-align:left;white-space:normal;font-size:13px;padding:8px 12px 8px 38px;border-radius:8px;margin:1px 0}
+.nav .ngi .soon{color:#8da0a6;font-weight:600;cursor:default}.nav .ngi .soon em{font-style:normal;font-size:9.5px;background:#EEF2F3;border-radius:10px;padding:1px 7px;margin-left:6px;color:#6b7f86}
+.nav .ngsep{height:1px;background:var(--line);margin:10px 6px}
+.nav .ng.elo .ngh i{background:var(--roxo)}
+main,.foot{margin-left:var(--sw);max-width:none}
+main{padding:22px 28px 40px}
+.navbtn{display:none}.savebadge{color:#cfe3e7;background:#ffffff1a}.savebadge.ok{background:#10A66A26;color:#9BEFC6}
+@media(max-width:900px){
+  .navbtn{display:inline-flex}
+  .nav{top:0;padding-top:56px;transform:translateX(-102%);transition:transform .2s;box-shadow:6px 0 24px rgba(0,0,0,.2);width:min(86vw,300px);z-index:60}
+  body.navopen .nav{transform:none}
+  main,.foot{margin-left:0}
+  main{padding:14px 12px 30px}
+}
+</style>
 </head>
 <body>
 <div class="loader" id="loader"><div><i></i><span>Processando...</span></div></div>
 <div class="toast" id="toast"></div>
 <header class="top">
   <div class="topin">
+    <button class="btn light navbtn" onclick="document.body.classList.toggle('navopen')" aria-label="Menu">☰ Menu</button>
     <div class="brand" id="brand"></div>
     <div class="client"><label>Cliente</label><select id="clientSel"></select></div>
     <div class="actions">
-      <span class="savebadge" id="saveBadge">Salvo na nuvem</span><button class="btn light" onclick="Cloud.logout()" title="Sair">Sair</button>
+      <span class="savebadge ok" id="saveBadge">Salvo na nuvem</span><button class="btn light" onclick="Cloud.logout()" title="Sair">Sair</button>
       <button class="btn light" id="modeBtn" onclick="setMode(MODE==='eloga'?'cli':'eloga')">Gestão ELOGA</button>
       <button class="btn light cli-only" onclick="newClient()">+ Cliente</button>
       <button class="btn light" onclick="exportClient()" title="Baixar arquivo .json com os dados deste cliente">Backup</button>
@@ -1747,7 +1774,7 @@ const PAGES = [
 let PAGE = 'exec';
 
 function show(p){
-  PAGE = p;
+  PAGE = p; document.body.classList.remove('navopen');
   if (p.startsWith('e_') && MODE !== 'eloga') { MODE = 'eloga'; buildNav(); document.body.classList.add('mode-eloga'); $('modeBtn').textContent = '← Voltar aos clientes'; }
   document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('active', b.dataset.p === p));
   document.querySelectorAll('.page').forEach(s => s.classList.toggle('active', s.id === 'pg_' + p));
@@ -2666,7 +2693,7 @@ function buildPDF(){
    ========================================================= */
 async function init(){
   await Cloud.boot(); await loadDB(); Cloud.watch(); chartDefaults(); applyBrand(); refreshClientSelect();
-  buildNav();
+  buildNav(); navMeasure();
   $('main').innerHTML = PAGES.concat(EPAGES).map(([k]) => `<section class="page" id="pg_${k}"></section>`).join('');
   $('clientSel').onchange = e => openClient(e.target.value);
   setSaveBadge(storageOK);
@@ -3761,7 +3788,23 @@ function renderEHoras(){
 }
 function exportEloga(){ download(`ELOGA_gestao_interna_${todayIso()}.json`, JSON.stringify({ app:'ELOGA-GESTAO', version:APP_VERSION, exported:new Date().toISOString(), eloga: E() }, null, 1), 'application/json'); toast('Backup da gestão ELOGA gerado.'); }
 function setMode(m){ MODE = m; buildNav(); document.body.classList.toggle('mode-eloga', m === 'eloga'); $('modeBtn').textContent = m === 'eloga' ? '← Voltar aos clientes' : 'Gestão ELOGA'; show(m === 'eloga' ? 'e_painel' : 'exec'); }
-function buildNav(){ const list = MODE === 'eloga' ? EPAGES : PAGES; $('nav').innerHTML = list.map(([k,l]) => `<button data-p="${k}" onclick="show('${k}')">${l}</button>`).join(''); }
+const NAV_CLI = [
+  ['1','Importação',[['importar','Importar arquivos'],['soon','Leitor de PDFs (autodiagnóstico, proposta, plano)'],['soon','Fluxo de caixa do cliente (planilha modelo)']]],
+  ['2','Preenchimento',[['dados','Preencher dados'],['empresa','Empresa'],['cad','Cadastros']]],
+  ['3','Análise',[['exec','Visão executiva'],['agenda','Agenda e atendimentos'],['rent','Rentabilidade'],['ciclo','Ciclo de receita'],['fat','Faturamento e glosas'],['caixa','Caixa e recebimento'],['prod','Produção'],['rep','Repasse'],['fisc','Notas e impostos'],['ind','Indicadores']]],
+  ['4','Diagnóstico',[['diag','Diagnóstico por pilares'],['mkt','Marketing e NPS'],['estr','Estratégias']]],
+  ['5','Documentos',[['rel','Relatório'],['glos','Glossário']]]
+];
+const NAV_CLOSED = {};
+function navToggle(k){ NAV_CLOSED[k] = !NAV_CLOSED[k]; buildNav(); }
+function buildNav(){
+  const grp = MODE === 'eloga' ? [['G','Gestão ELOGA',EPAGES]] : NAV_CLI;
+  const act = typeof PAGE !== 'undefined' ? PAGE : '';
+  $('nav').innerHTML = grp.map(([n,t,items]) => `<div class="ng ${MODE==='eloga'?'elo':''} ${NAV_CLOSED[t]?'closed':''}"><button class="ngh" onclick="navToggle('${t}')"><i>${n==='G'?'★':n}</i>${t}<b>▼</b></button><div class="ngi">${items.map(([k,l]) => k==='soon' ? `<div class="soon">${l}<em>em breve</em></div>` : `<button data-p="${k}" class="${k===act?'active':''}" onclick="show('${k}')">${l}</button>`).join('')}</div></div>`).join('') + (MODE==='eloga' ? '' : '<div class="ngsep"></div><div class="ng"><button class="ngh" onclick="setMode(\'eloga\')"><i>★</i>Gestão ELOGA</button></div>');
+}
+function navMeasure(){ const t = document.querySelector('header.top'); if (t) document.documentElement.style.setProperty('--hh', t.offsetHeight + 'px'); }
+document.addEventListener('click', e => { if (document.body.classList.contains('navopen') && !e.target.closest('.nav') && !e.target.closest('.navbtn')) document.body.classList.remove('navopen'); });
+window.addEventListener('resize', navMeasure); window.addEventListener('load', navMeasure);
 
 function ePainelAlertas(){
   const e = E2(); const t = todayIso(); const al = [];
