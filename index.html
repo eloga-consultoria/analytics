@@ -671,7 +671,7 @@ const PDFW_B64='LyoqCiAqIEBsaWNzdGFydCBUaGUgZm9sbG93aW5nIGlzIHRoZSBlbnRpcmUgbGlj
    01 - Núcleo: campos, estado, armazenamento e utilitários
    ========================================================= */
 'use strict';
-const APP_VERSION = '2.5.1';
+const APP_VERSION = '3.0.0-beta';
 const STORE_KEY = 'eloga_painel_financeiro_v1';
 const $ = id => document.getElementById(id);
 
@@ -1793,7 +1793,7 @@ function chartImage(cfg, w=1400, h=620){
    05 - Interface: navegação, páginas e componentes
    ========================================================= */
 const PAGES = [
-  ['clientes','Visão geral de clientes'],['exec','Visão executiva'],['empresa','Cadastro do cliente'],['cad','Cadastros'],['agenda','Agenda e atendimentos'],['fat','Faturamento e glosas'],['rep','Repasse'],['fisc','Notas e impostos'],['diag','Diagnóstico por pilares'],['mkt','Marketing e NPS'],['dados','Preencher dados'],['importar','Importar arquivos'],
+  ['clientes','Visão geral de clientes'],['exec','Visão executiva'],['empresa','Cadastro do cliente'],['cad','Cadastros'],['agenda','Agenda e atendimentos'],['fat','Faturamento e glosas'],['rep','Repasse'],['fisc','Notas e impostos'],['diag','Diagnóstico por pilares'],['dados','Preencher dados'],['importar','Importar arquivos'],
   ['rent','Rentabilidade'],['ciclo','Ciclo de receita'],['caixa','Caixa e recebimento'],['prod','Produção'],
   ['ind','Indicadores'],['estr','Estratégias'],['rel','Relatório'],['glos','Glossário']
 ];
@@ -2148,7 +2148,7 @@ function renderGlos(){
   ${notice('warn','<b>Referências externas não são metas automáticas.</b> Parâmetros hospitalares e internacionais indicam o que monitorar. A meta de cada cliente parte da própria linha de base (3 a 6 meses) e de uma melhoria realista.')}</div>`;
 }
 
-const RENDER = { mkt:()=>renderMkt(), diag:()=>renderDiag(), fisc:()=>renderFisc(), e_fisc:()=>renderEFisc(), e_proj:()=>renderEProj(), e_metas:()=>renderEMetas(), e_contr:()=>renderEContr(), e_parc:()=>renderEParc(), e_entr:()=>renderEEntr(), e_painel:()=>renderEPainel(), e_cli:()=>renderECli(), e_ent:()=>renderEEnt(), e_ag:()=>renderEAg(), e_fin:()=>renderEFin(), e_horas:()=>renderEHoras(), cad:()=>renderCad(), agenda:()=>renderAgenda(), fat:()=>renderFat(), rep:()=>renderRep(), exec:renderExec, empresa:renderEmpresa, clientes:renderClientes, dados:renderDados, importar:()=>renderImport(), rent:renderRent, ciclo:renderCiclo, caixa:renderCaixa, prod:renderProd, ind:renderInd, estr:renderEstr, rel:renderRel, glos:renderGlos };
+const RENDER = { diag:()=>renderDiag(), fisc:()=>renderFisc(), e_fisc:()=>renderEFisc(), e_proj:()=>renderEProj(), e_metas:()=>renderEMetas(), e_contr:()=>renderEContr(), e_parc:()=>renderEParc(), e_entr:()=>renderEEntr(), e_painel:()=>renderEPainel(), e_cli:()=>renderECli(), e_ent:()=>renderEEnt(), e_ag:()=>renderEAg(), e_fin:()=>renderEFin(), e_horas:()=>renderEHoras(), cad:()=>renderCad(), agenda:()=>renderAgenda(), fat:()=>renderFat(), rep:()=>renderRep(), exec:renderExec, empresa:renderEmpresa, clientes:renderClientes, dados:renderDados, importar:()=>renderImport(), rent:renderRent, ciclo:renderCiclo, caixa:renderCaixa, prod:renderProd, ind:renderInd, estr:renderEstr, rel:renderRel, glos:renderGlos };
 
 /* ---------- Clientes ---------- */
 function refreshClientSelect(){
@@ -2171,6 +2171,7 @@ function restoreBackup(){
       if (d.eloga && (!Object.values(E()).some(v => Array.isArray(v) && v.length) || confirm('O backup contém dados da gestão interna ELOGA. Substituir os dados atuais da gestão ELOGA?'))) { DB.eloga = d.eloga; if (d.app === 'ELOGA-GESTAO') { save(true); toast('Gestão ELOGA restaurada.', 'good'); return show(PAGE); } }
       const list = d.clients || (d.meta ? [d] : null); if (!list || !list.length) throw new Error('arquivo sem clientes');
       let n = 0; list.forEach(c => { if (!c.meta) return; c.id = c.id || uid(); if (DB.clients[c.id] && !confirm(`"${c.meta.tradeName||c.meta.company}" já existe neste navegador. Substituir pela versão do backup?`)) return; DB.clients[c.id] = upgradeClient(c); n++; });
+      if (n) Object.keys(DB.clients).forEach(id => { const c = DB.clients[id]; if (c && clientBlank(c) && id !== DB.pendingNew && id !== list[list.length-1].id) delete DB.clients[id]; });
       save(true); if (n && PAGE !== 'clientes') openClient(list[list.length-1].id); applyBrand(); toast(`${n} cliente(s) restaurado(s).`); if (PAGE==='clientes') renderClientes(); else if (PAGE==='empresa') renderEmpresa();
     } catch(x){ toast('Não foi possível ler o backup: ' + x.message, 'bad'); } };
     r.readAsText(f); };
@@ -2251,14 +2252,6 @@ function readSheetFile(f){
       $('impWork').scrollIntoView({ behavior:'smooth' });
     } catch(x){ toast('Não foi possível ler a planilha: ' + x.message, 'bad'); } finally { loader(); } };
   r.readAsArrayBuffer(f);
-}
-function sheetRows(ws){
-  const aoa = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true, blankrows:false });
-  // encontra a linha de cabeçalho: a primeira com ao menos 2 textos
-  let hi = aoa.findIndex(r => r.filter(c => typeof c === 'string' && c.trim()).length >= 2); if (hi < 0) hi = 0;
-  let headers = (aoa[hi]||[]).map((h,i) => { const s = h instanceof Date ? toYM(h) : String(h||'').trim(); return s || 'Coluna ' + (i+1); });
-  let rows = aoa.slice(hi+1).filter(r => r.some(c => c !== '' && c !== null)).map(r => Object.fromEntries(headers.map((h,i) => [h, r[i]])));
-  return { headers, rows };
 }
 function transposeIfWide(h, rows){
   // Meses nas colunas? Converte para uma linha por mês
@@ -2767,8 +2760,11 @@ async function readAOA(file){
   return best || [];
 }
 function aoaToRows(aoa){
-  let hi = 0, max = 0;
-  aoa.slice(0, 25).forEach((r, i) => { const n = r.filter(c => cleanCell(c)).length; if (n > max) { max = n; hi = i; } });
+  // cabeçalho = primeira linha (nas 25 primeiras) com ao menos metade da largura da mais larga e feita de texto (não de números); evita tomar uma linha de dados larga como cabeçalho
+  let hi = 0, max = 0; const stat = aoa.slice(0, 25).map(r => { const f = r.filter(c => cleanCell(c)); const t = f.filter(c => toNum(c) === null).length; return { n:f.length, tx: f.length ? t / f.length : 0 }; });
+  stat.forEach(s => { if (s.n > max) max = s.n; });
+  const hit = stat.findIndex(s => s.n >= Math.max(2, Math.ceil(max * 0.5)) && s.tx >= 0.7);
+  if (hit >= 0) hi = hit; else stat.forEach((s, i) => { if (s.n === max) { hi = hi || i; } });
   const headers = (aoa[hi]||[]).map((h, i) => cleanCell(h) || 'Coluna ' + (i+1));
   const rows = aoa.slice(hi+1).filter(r => r.filter(c => cleanCell(c)).length >= 2).map(r => Object.fromEntries(headers.map((h, i) => [h, cleanCell(r[i])])));
   return { headers, rows, meta: aoa.slice(0, hi).map(r => r.map(cleanCell)) };
@@ -3436,58 +3432,6 @@ function renderRep(){
 
 /* ---------- Tela: Faturamento e glosas ---------- */
 let FATP = '', GLF = { payer:'', st:'' }, FTAB = 'visao';
-const FTABS = [['visao','Visão geral: autorizado → recebido'],['aut','Autorizações'],['conf','Conferência'],['lotes','Lotes e pagamentos'],['glosas','Glosas e recursos']];
-function renderFat(){
-  const D = rcmData(); const ms = windowMonths(); const set = new Set(ms);
-  const inPer = b => ms.some(m => b.ci.slice(0,7) <= m && b.cf.slice(0,7) >= m);
-  const bs = D.batches.filter(inPer).sort((a,b) => (a.ci < b.ci ? 1 : -1));
-  const payers = [...new Set(S.fat.map(b => b.payer))]; if (!FATP || !payers.includes(FATP)) FATP = payers[0] || '';
-  const dpMonths = ms.filter(m => S.fat.some(b => norm(b.payer) === norm(FATP) && b.ci.slice(0,7) <= m && b.cf.slice(0,7) >= m));
-  const items = []; S.dem.forEach((b, bi) => b.items.forEach((it, ii) => { if (it.gl > 0 && set.has(it.d.slice(0,7))) items.push({ b, bi, it, ii }); }));
-  const itF = items.filter(x => (!GLF.payer || x.b.payer === GLF.payer) && (!GLF.st || x.it.rs === GLF.st));
-  const sumI = f => items.reduce((s,x) => s + (f(x)||0), 0);
-  const gl = sumI(x => x.it.gl), rr = sumI(x => toNum(x.it.rr)), rc = sumI(x => toNum(x.it.rc)), fin = sumI(x => REC_FINAL.has(x.it.rs) ? x.it.gl - (toNum(x.it.rc)||0) : 0), open = gl - rc - fin;
-  const apresDem = S.dem.reduce((s,b) => s + b.items.filter(i => set.has(i.d.slice(0,7))).reduce((a,i)=>a+i.inf,0), 0);
-  const dp = FATP && dpMonths.length ? depara(FATP, dpMonths) : null;
-  const byPayer = {}; items.forEach(x => { const o = (byPayer[x.b.payer] = byPayer[x.b.payer] || { gl:0, rc:0, fin:0 }); o.gl += x.it.gl; o.rc += toNum(x.it.rc)||0; if (REC_FINAL.has(x.it.rs)) o.fin += x.it.gl - (toNum(x.it.rc)||0); });
-  const motivos = {}; items.forEach(x => { const m = (x.it.gcode ? x.it.gcode + ' · ' : '') + (x.it.gdesc || 'Não informado'); motivos[m] = (motivos[m]||0) + x.it.gl; });
-  $('pg_fat').innerHTML = head('Faturamento e glosas','Faturamento enviado por operadora, conferência com a agenda, demonstrativos, recursos de glosa e pagamentos.') + `
-  <div class="card smart"><div><h3>Importar arquivos do faturamento</h3><p>Autorizações do portal da operadora, planilha de atendimentos enviados, demonstrativo de análise (glosas) ou recebimentos. Você informa a operadora e a competência na importação.</p></div><div class="row" style="margin:0;margin-left:auto"><button class="btn pdf" onclick="smartImport('fat')">Faturamento enviado</button><button class="btn pdf" onclick="smartImport('dem')">Demonstrativo / glosas</button><button class="btn" onclick="smartImport('receb')">Recebimentos</button><button class="btn pdf" onclick="autImport()">Autorizações (PDF/Excel)</button><button class="btn ghost" onclick="downloadModels()">Modelos de planilha</button></div></div>
-  <div id="fatWork"></div>
-  <div class="subtabs">${FTABS.map(([k,l]) => `<button class="${FTAB===k?'active':''}" onclick="FTAB='${k}';renderFat()">${l}</button>`).join('')}</div>
-  ${FTAB === 'visao' ? fatFunil() : ''}${FTAB === 'aut' ? fatAut() : ''}${FTAB === 'conf' ? fatConfGuia() : ''}
-  ${FTAB === 'lotes' ? `<div class="card"><div class="chead"><h3>Faturamentos do período por operadora</h3></div>
-  ${bs.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Operadora</th><th>Tipo</th><th>Competência</th><th>Envio</th><th>Itens</th><th>Apresentado</th><th>Glosado</th><th title="Valor que a operadora deve pagar: liberado no demonstrativo (ou apresentado, se ainda não houver demonstrativo)">A receber</th><th title="Envio + prazo do contrato">Previsão</th><th>Pagamentos (data e valor)</th><th>Saldo</th><th></th></tr></thead><tbody>
-  ${bs.map(b => { const arr = b.kind === 'fat' ? 'fat' : 'dem'; const idx = S[arr].indexOf(b); const saldo = b.expected - b.paid; const late = b.due && saldo > 0.01 && b.due < isoLocal(new Date());
-    return `<tr><td><b>${esc(b.payer)}</b><br><small>${esc(b.file||'')}</small></td><td>${b.kind==='fat'?'Faturamento enviado':'Demonstrativo'}${D.dupe(b)?'<br><small class="muted">coberto pelo demonstrativo</small>':''}</td><td>${toDate(b.ci).toLocaleDateString('pt-BR')}<br>${toDate(b.cf).toLocaleDateString('pt-BR')}</td>
-    <td><input type="date" class="cin sm" value="${esc(b.envio||'')}" onchange="S.${arr}[${idx}].envio=this.value;resetAll();renderFat()"></td><td class="num">${fmtNum(b.kind==='fat'?b.rows.length:b.items.length)}</td><td class="num">${fmtMoney2(b.apres)}</td><td class="num">${b.kind==='dem'?fmtMoney2(b.glos):'—'}</td><td class="num">${fmtMoney2(b.expected)}</td><td class="${late?'neg':''}">${b.due?toDate(b.due).toLocaleDateString('pt-BR'):'—'}</td>
-    <td class="pays">${b.pays.map((p,j) => `<div><input type="date" class="cin sm" value="${esc(p.d||'')}" onchange="S.${arr}[${idx}].pays[${j}].d=this.value;resetAll();renderFat()"><input class="cin xs num" value="${isNum(toNum(p.v))?fmtNum(toNum(p.v),2):''}" onchange="S.${arr}[${idx}].pays[${j}].v=toNum(this.value);resetAll();renderFat()"><button class="lnk" onclick="S.${arr}[${idx}].pays.splice(${j},1);resetAll();renderFat()">×</button></div>`).join('')}<button class="lnk" style="color:var(--roxo)" onclick="S.${arr}[${idx}].pays.push({d:'',v:${Math.max(0,saldo).toFixed(2)}});save();renderFat()">+ pagamento</button></td>
-    <td class="num ${saldo>0.01?'neg':''}">${fmtMoney2(saldo)}</td><td><button class="lnk" onclick="if(confirm('Excluir esta importação?')){S.${arr}.splice(${idx},1);resetAll();renderFat()}">excluir</button></td></tr>`; }).join('')}
-  </tbody></table></div>` : notice('warn', 'Nenhum faturamento ou demonstrativo com competência no período selecionado.')}
-  <div class="howto"><b>Como usar:</b> informe a <b>data e o valor de cada pagamento</b> recebido da operadora. Com isso o painel calcula o prazo médio de recebimento, o saldo a receber e o que está vencido (pelo prazo do contrato cadastrado na operadora). Quando existe demonstrativo da mesma competência, ele substitui a planilha enviada nos totais, para não contar em dobro.</div></div>
-` : ''}
-  ${FTAB === 'conf' && dp ? `<div class="card"><div class="chead"><h3>Conferência por paciente: atendimentos da agenda × enviados ao faturamento <small class="muted">(${esc(periodLabel(dpMonths))}: meses com faturamento importado)</small></h3><select onchange="FATP=this.value;renderFat()">${payers.map(p=>`<option ${p===FATP?'selected':''}>${esc(p)}</option>`).join('')}</select></div>
-    <div class="kpis">${[['Agenda','Sessões cobráveis na agenda', fmtNum(dp.exp), 'Realizados + faltas cobradas deste convênio nos meses com faturamento importado.'],['Enviado','Sessões enviadas ao faturamento', fmtNum(dp.fat), 'Valor de cada guia ÷ valor da tabela (ou quantidade informada).'],['Conferidos','Pacientes conferidos', `${fmtNum(dp.ok)} de ${fmtNum(dp.list.length)}`, 'Mesma quantidade na agenda e no faturamento.'],['A menor','Faturado a menor', fmtNum(dp.menos), `Possíveis sessões não cobradas: cerca de ${fmtMoney(dp.valMenos)}.`],['A maior','Faturado a maior', fmtNum(dp.mais), 'Enviado mais do que consta como realizado na agenda: verifique agendamentos sem baixa.'],['Sem agenda','Faturado sem agenda', fmtNum(dp.semAg), 'Pacientes no faturamento sem atendimento deste convênio na agenda.']].map(([s,n,v,d]) => `<div class="kpi neu"><div class="kl"><span class="sig">${s}</span>${n}</div><div class="kv">${v}</div><div class="kd">${d}</div></div>`).join('')}</div>
-    <div class="tscroll" style="max-height:420px"><table class="tbl"><thead><tr><th>Paciente (código)</th><th>Profissional</th><th>Realizados</th><th>Faltas cobradas</th><th>Enviadas</th><th>Diferença</th><th>Situação</th></tr></thead><tbody>
-    ${dp.list.filter(o => o.st !== 'Conferido').slice(0, 300).map(o => `<tr><td>${patLabel(o.p)}</td><td>${esc(o.profN)}</td><td class="num">${o.real}</td><td class="num">${o.cob}</td><td class="num">${o.fat}</td><td class="num ${o.diff<0?'neg':o.diff>0?'warn':''}">${o.diff>0?'+':''}${o.diff}</td><td>${esc(o.st)}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Nenhuma divergência.</td></tr>'}
-    </tbody></table></div><div class="howto"><b>Como ler:</b> comparação por paciente e mês, porque uma guia pode reunir várias sessões. O cruzamento usa o código do paciente do sistema; o nome não é exibido nem gravado. Diferença negativa = faturado a menor; positiva = faturado a maior.</div></div>` : ''}
-  ${FTAB === 'glosas' ? `<div class="card"><div class="chead"><h3>Glosas e recursos</h3><div class="row" style="margin:0"><select onchange="GLF.payer=this.value;renderFat()"><option value="">Todas as operadoras</option>${[...new Set(S.dem.map(b=>b.payer))].map(p=>`<option ${GLF.payer===p?'selected':''}>${esc(p)}</option>`).join('')}</select><select onchange="GLF.st=this.value;renderFat()"><option value="">Todos os status</option>${REC_ST.map(s=>`<option ${GLF.st===s?'selected':''}>${s}</option>`).join('')}</select></div></div>
-  <div class="kpis">${[['Apres.','Valor apresentado (demonstrativos)', fmtMoney(apresDem), 'Valor cobrado nas contas analisadas no período.'],['Glosado','Glosado na 1ª análise', fmtMoney(gl) + ` · ${fmtPct(div(gl,apresDem))}`, 'Recusado pela operadora no demonstrativo.'],['Recorrido','Valor recorrido', fmtMoney(rr), 'Informado por item abaixo.'],['Recuperado','Valor recuperado', fmtMoney(rc) + (rr?` · ${fmtPct(div(rc,rr))}`:''), 'Pago pela operadora após o recurso.'],['Em aberto','Glosa em aberto', fmtMoney(open), 'Sem recurso ou com recurso sem resposta.'],['Final','Glosa final (perda)', fmtMoney(fin), 'Indeferida, deferida em parte ou não recorrida.']].map(([s,n,v,d]) => `<div class="kpi neu"><div class="kl"><span class="sig">${s}</span>${n}</div><div class="kv">${v}</div><div class="kd">${d}</div></div>`).join('')}</div>
-  <div class="grid"><div class="c6"><div class="cwrap sm"><canvas id="ch_glp"></canvas></div><div class="howto"><b>Como ler:</b> glosa de cada operadora dividida em recuperado, em aberto e perda final.</div></div>
-  <div class="c6"><table class="tbl sm"><thead><tr><th>Motivo da glosa</th><th>Valor</th><th>%</th></tr></thead><tbody>${Object.entries(motivos).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([m,v]) => `<tr><td>${esc(m)}<br><small>${glosaCategory(m)}</small></td><td class="num">${fmtMoney2(v)}</td><td class="num">${fmtPct(div(v,gl))}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">Sem glosas.</td></tr>'}</tbody></table></div></div>
-  ${itF.length ? `<div class="row"><b>${itF.length} item(ns) glosado(s)</b><span class="muted">Ação em lote para os itens filtrados:</span><select id="bulkSt">${REC_ST.map(s=>`<option>${s}</option>`).join('')}</select><button class="btn sm" onclick="bulkRec()">Aplicar status</button><button class="btn sm ghost" onclick="bulkRec(true)">Marcar como recorrido (valor total)</button><button class="btn sm ghost" onclick="exportRecurso()">Exportar lista de recurso (Excel)</button></div>
-  <div class="tscroll" style="max-height:520px"><table class="tbl sm"><thead><tr><th>Operadora</th><th>Data</th><th>Guia</th><th>Procedimento</th><th>Glosado</th><th>Motivo</th><th>Status do recurso</th><th>Recorrido</th><th>Recuperado</th><th>Data do recurso</th></tr></thead><tbody>
-  ${itF.slice(0, 400).map(x => `<tr><td>${esc(x.b.payer)}</td><td>${toDate(x.it.d).toLocaleDateString('pt-BR')}</td><td>${esc(x.it.guia)}</td><td>${esc(x.it.desc)}</td><td class="num">${fmtMoney2(x.it.gl)}</td><td><small>${esc(x.it.gcode)} ${esc(x.it.gdesc)}</small></td>
-    <td><select onchange="S.dem[${x.bi}].items[${x.ii}].rs=this.value;resetAll();renderFat()">${REC_ST.map(s=>`<option ${x.it.rs===s?'selected':''}>${s}</option>`).join('')}</select></td>
-    <td><input class="cin xs num" value="${isNum(toNum(x.it.rr))?fmtNum(toNum(x.it.rr),2):''}" onchange="S.dem[${x.bi}].items[${x.ii}].rr=toNum(this.value);resetAll();renderFat()"></td>
-    <td><input class="cin xs num" value="${isNum(toNum(x.it.rc))?fmtNum(toNum(x.it.rc),2):''}" onchange="S.dem[${x.bi}].items[${x.ii}].rc=toNum(this.value);resetAll();renderFat()"></td>
-    <td><input type="date" class="cin sm" value="${esc(x.it.rd||'')}" onchange="S.dem[${x.bi}].items[${x.ii}].rd=this.value;save()"></td></tr>`).join('')}
-  </tbody></table></div>` : notice('', 'Nenhuma glosa no período e filtros selecionados.')}
-  <div class="howto"><b>Como usar:</b> depois de importar o demonstrativo, atualize aqui o <b>status do recurso</b>, o <b>valor recorrido</b> e o <b>valor recuperado</b> de cada item. Enquanto não houver desfecho, a glosa fica "em aberto" e não entra como perda.</div></div>` : ''}`;
-  if (FTAB === 'visao') fatFunilCharts();
-  const pk = Object.keys(byPayer);
-  draw('ch_glp', pk.length ? { type:'bar', data:{ labels:pk, datasets:[{ label:'Recuperado', data:pk.map(p=>byPayer[p].rc), backgroundColor:PAL.good, stack:'s' },{ label:'Em aberto', data:pk.map(p=>byPayer[p].gl-byPayer[p].rc-byPayer[p].fin), backgroundColor:PAL.grey, stack:'s' },{ label:'Glosa final', data:pk.map(p=>byPayer[p].fin), backgroundColor:PAL.bad, stack:'s' }] }, options:{ indexAxis:'y', scales:{ x:{ stacked:true, ticks:{ callback:moneyTick } }, y:{ stacked:true } }, plugins:{ vlabels:{ fmt: v => fmtCompact(v).replace('R$ ','') }, tooltip:{ callbacks:{ label: tipMoney } } } } } : null);
-}
 function bulkRec(recorrido){ const ms = new Set(windowMonths()); const st = $('bulkSt').value;
   S.dem.forEach(b => b.items.forEach(it => { if (it.gl > 0 && ms.has(it.d.slice(0,7)) && (!GLF.payer || b.payer === GLF.payer) && (!GLF.st || it.rs === GLF.st)) { if (recorrido) { it.rr = it.gl; if (it.rs === 'Pendente de análise') it.rs = 'Recurso enviado'; } else it.rs = st; } }));
   resetAll(); renderFat(); toast('Itens atualizados.', 'good'); }
@@ -3516,7 +3460,57 @@ const DSTAT = [['c','Conforme',1],['p','Parcial',0.5],['n','Não conforme',0],['
 const DSTN = Object.fromEntries(DSTAT.map(x => [x[0], x]));
 /* w = peso (3 crítico, 2 importante, 1 boa prática) · seg = segmentos (vazio = todos) · ref = base legal ou técnica */
 const DIAG = [
- { k:'reg', n:'Regulatório e documentação legal', d:'Licenças, cadastros, conselhos profissionais, prontuário, LGPD e contratos que sustentam a operação e evitam autuação, interdição e glosa.', items:[
+ { k:'fat', n:'Faturamento e ciclo de receita', d:'Conferência da agenda, envio das guias, glosas, recursos e conciliação dos recebimentos de operadoras e particulares.', items:[
+  ['fin4',3,'Conferência da agenda com o faturamento antes do envio das guias',''],
+  ['fin5',3,'Controle de glosas e recursos com prazos por operadora',''],
+  ['fin6',2,'Conciliação dos pagamentos das operadoras com o faturado',''],
+  ['fin7',2,'Controle de recebimentos e inadimplência do particular',''] ]},
+ { k:'fin', n:'Financeiro e DRE', d:'Rotinas de controle financeiro que sustentam os números do painel: contas, DRE, fluxo de caixa e repasses.', items:[
+  ['fin1',3,'Separação entre contas da empresa e dos sócios, com pró-labore definido',''],
+  ['fin2',3,'DRE gerencial mensal com custos classificados em fixos e variáveis',''],
+  ['fin3',3,'Fluxo de caixa projetado (mínimo 90 dias)',''],
+  ['fin8',2,'Cálculo e conferência do repasse aos profissionais por regra formal',''] ]},
+ { k:'com', n:'Comercial (com Marketing e NPS)', d:'Como a clínica atrai, atende e converte novos pacientes, define preços, se comunica e mede a satisfação (marketing e presença digital incluídos).', items:[
+  ['com1',3,'Canais de entrada de pacientes identificados (indicação, convênio, Google, Instagram, médicos)',''],
+  ['com2',3,'Registro de todos os contatos/leads com origem, data e resultado (CRM ou planilha)',''],
+  ['com3',3,'Tempo de resposta ao primeiro contato definido e cumprido (meta sugerida: até 1 hora útil)',''],
+  ['com4',2,'Roteiro padronizado de atendimento comercial (acolhimento, triagem, agendamento)',''],
+  ['com5',2,'Follow-up de quem pediu informação e não agendou',''],
+  ['com6',3,'Tabela de preços do particular calculada pelo custo e pela margem desejada',''],
+  ['com7',2,'Pacotes e planos terapêuticos com regras claras de pagamento, faltas e reposição',''],
+  ['com8',2,'Parcerias ativas com fontes de indicação (médicos, escolas, outras clínicas)',''],
+  ['com9',2,'Taxa de conversão (contato → avaliação → início) medida mensalmente',''],
+  ['com10',1,'Análise de motivos de perda (preço, horário, convênio não atendido)',''],
+  ['mkt1',3,'Perfil da Empresa no Google completo (endereço, horários, fotos, telefone, site)',''],
+  ['mkt2',2,'Estratégia para gerar e responder avaliações no Google',''],
+  ['mkt3',2,'Instagram com posicionamento, identidade visual e frequência de publicação definidos',''],
+  ['mkt4',2,'Calendário editorial com conteúdo educativo sobre os serviços',''],
+  ['mkt5',1,'Site ou página com serviços, convênios aceitos e canal de agendamento',''],
+  ['mkt6',2,'WhatsApp comercial com mensagem de boas-vindas, catálogo e respostas rápidas',''],
+  ['mkt7',2,'Investimento em anúncios com orçamento, público e resultado medidos',''],
+  ['mkt8',2,'Custo por paciente novo (CAC) calculado por canal',''],
+  ['mkt9',1,'Materiais institucionais para fontes de indicação (médicos, escolas)',''],
+  ['mkt10',1,'Comunicação de relacionamento com pacientes ativos (datas, conteúdos, eventos)',''] ]},
+{ k:'age', n:'Agendamento e ocupação', d:'Organização da agenda, confirmação, faltas, lista de espera e uso da capacidade instalada.', items:[
+  ['age1',3,'Grade de disponibilidade de cada profissional definida e atualizada',''],
+  ['age2',3,'Confirmação ativa das sessões (ex.: 48h e 24h antes)',''],
+  ['age3',3,'Política de faltas e cancelamentos formalizada e comunicada ao paciente',''],
+  ['age4',3,'Baixa diária de todos os atendimentos no sistema (realizado, falta, cancelado)',''],
+  ['age5',2,'Lista de espera ativa e usada para preencher horários vagos',''],
+  ['age6',2,'Regra de reposição de sessões por falta do profissional ou da clínica',''],
+  ['age7',2,'Indicadores de ocupação, faltas e cancelamentos acompanhados mensalmente',''],
+  ['age8',2,'Controle de autorizações/guias vinculado à agenda (validade e quantidade)','Evita atendimento sem cobertura','terapia'],
+  ['age9',1,'Horários ociosos mapeados para ações de captação',''] ]},
+{ k:'qua', n:'Qualidade e experiência do paciente', d:'Padronização do atendimento, satisfação e tratamento de reclamações.', items:[
+  ['qua1',3,'POPs de recepção, agendamento, faturamento e atendimento escritos e treinados',''],
+  ['qua2',2,'Pesquisa de satisfação (NPS) aplicada periodicamente',''],
+  ['qua3',2,'Canal de reclamações com registro, prazo de resposta e análise de causa',''],
+  ['qua4',2,'Devolutivas e reuniões de acompanhamento com famílias/pacientes',''],
+  ['qua5',2,'Plano terapêutico documentado com metas e reavaliação periódica','','terapia'],
+  ['qua6',2,'Integração e treinamento de novos profissionais',''],
+  ['qua7',1,'Ambiente adequado: limpeza, conforto, sinalização e recepção',''],
+  ['qua8',2,'Indicadores de qualidade assistencial definidos e acompanhados',''] ]},
+{ k:'reg', n:'Regulatório', d:'Licenças, cadastros, conselhos profissionais, prontuário, LGPD e contratos que sustentam a operação e evitam autuação, interdição e glosa.', items:[
   ['reg1',3,'Alvará de funcionamento da Prefeitura vigente e compatível com as atividades','Legislação municipal'],
   ['reg2',3,'Licença sanitária (Vigilância Sanitária) vigente para o estabelecimento','RDC Anvisa 63/2011 e legislação sanitária local'],
   ['reg3',3,'CNES atualizado: estabelecimento, serviços e profissionais com CBO correto','Portaria MS/SAES; exigido pelas operadoras. CBO errado gera glosa'],
@@ -3540,57 +3534,7 @@ const DIAG = [
   ['reg21',3,'Formalização da atividade avaliada: autônomo com inscrição municipal (ISS) ou pessoa jurídica (MEI/ME) conforme a profissão permite','Legislação municipal, LC 123/2006 e regras do conselho','autonomo'],
   ['reg22',2,'Consultório próprio ou sublocado com licença sanitária e cadastro no CNES quando atende convênio','Vigilância Sanitária e operadoras','autonomo'],
   ['reg23',2,'Livro-caixa e carnê-leão (pessoa física) ou contabilidade da PJ em dia','Receita Federal','autonomo'],
-  ['reg24',2,'Contrato de sublocação ou uso de sala formalizado, com divisão de responsabilidades','Código Civil','autonomo'] ]},
- { k:'com', n:'Comercial e captação', d:'Como a clínica atrai, atende e converte novos pacientes, e como define e apresenta preços.', items:[
-  ['com1',3,'Canais de entrada de pacientes identificados (indicação, convênio, Google, Instagram, médicos)',''],
-  ['com2',3,'Registro de todos os contatos/leads com origem, data e resultado (CRM ou planilha)',''],
-  ['com3',3,'Tempo de resposta ao primeiro contato definido e cumprido (meta sugerida: até 1 hora útil)',''],
-  ['com4',2,'Roteiro padronizado de atendimento comercial (acolhimento, triagem, agendamento)',''],
-  ['com5',2,'Follow-up de quem pediu informação e não agendou',''],
-  ['com6',3,'Tabela de preços do particular calculada pelo custo e pela margem desejada',''],
-  ['com7',2,'Pacotes e planos terapêuticos com regras claras de pagamento, faltas e reposição',''],
-  ['com8',2,'Parcerias ativas com fontes de indicação (médicos, escolas, outras clínicas)',''],
-  ['com9',2,'Taxa de conversão (contato → avaliação → início) medida mensalmente',''],
-  ['com10',1,'Análise de motivos de perda (preço, horário, convênio não atendido)',''] ]},
- { k:'age', n:'Agendamento e ocupação', d:'Organização da agenda, confirmação, faltas, lista de espera e uso da capacidade instalada.', items:[
-  ['age1',3,'Grade de disponibilidade de cada profissional definida e atualizada',''],
-  ['age2',3,'Confirmação ativa das sessões (ex.: 48h e 24h antes)',''],
-  ['age3',3,'Política de faltas e cancelamentos formalizada e comunicada ao paciente',''],
-  ['age4',3,'Baixa diária de todos os atendimentos no sistema (realizado, falta, cancelado)',''],
-  ['age5',2,'Lista de espera ativa e usada para preencher horários vagos',''],
-  ['age6',2,'Regra de reposição de sessões por falta do profissional ou da clínica',''],
-  ['age7',2,'Indicadores de ocupação, faltas e cancelamentos acompanhados mensalmente',''],
-  ['age8',2,'Controle de autorizações/guias vinculado à agenda (validade e quantidade)','Evita atendimento sem cobertura','terapia'],
-  ['age9',1,'Horários ociosos mapeados para ações de captação',''] ]},
- { k:'mkt', n:'Marketing e presença digital', d:'Visibilidade, reputação e comunicação da clínica com pacientes e famílias.', items:[
-  ['mkt1',3,'Perfil da Empresa no Google completo (endereço, horários, fotos, telefone, site)',''],
-  ['mkt2',2,'Estratégia para gerar e responder avaliações no Google',''],
-  ['mkt3',2,'Instagram com posicionamento, identidade visual e frequência de publicação definidos',''],
-  ['mkt4',2,'Calendário editorial com conteúdo educativo sobre os serviços',''],
-  ['mkt5',1,'Site ou página com serviços, convênios aceitos e canal de agendamento',''],
-  ['mkt6',2,'WhatsApp comercial com mensagem de boas-vindas, catálogo e respostas rápidas',''],
-  ['mkt7',2,'Investimento em anúncios com orçamento, público e resultado medidos',''],
-  ['mkt8',2,'Custo por paciente novo (CAC) calculado por canal',''],
-  ['mkt9',1,'Materiais institucionais para fontes de indicação (médicos, escolas)',''],
-  ['mkt10',1,'Comunicação de relacionamento com pacientes ativos (datas, conteúdos, eventos)',''] ]},
- { k:'qua', n:'Qualidade e experiência do paciente', d:'Padronização do atendimento, satisfação e tratamento de reclamações.', items:[
-  ['qua1',3,'POPs de recepção, agendamento, faturamento e atendimento escritos e treinados',''],
-  ['qua2',2,'Pesquisa de satisfação (NPS) aplicada periodicamente',''],
-  ['qua3',2,'Canal de reclamações com registro, prazo de resposta e análise de causa',''],
-  ['qua4',2,'Devolutivas e reuniões de acompanhamento com famílias/pacientes',''],
-  ['qua5',2,'Plano terapêutico documentado com metas e reavaliação periódica','','terapia'],
-  ['qua6',2,'Integração e treinamento de novos profissionais',''],
-  ['qua7',1,'Ambiente adequado: limpeza, conforto, sinalização e recepção',''],
-  ['qua8',2,'Indicadores de qualidade assistencial definidos e acompanhados',''] ]},
- { k:'fin', n:'Gestão financeira e faturamento', d:'Rotinas de controle que sustentam os números do painel financeiro.', items:[
-  ['fin1',3,'Separação entre contas da empresa e dos sócios, com pró-labore definido',''],
-  ['fin2',3,'DRE gerencial mensal com custos classificados em fixos e variáveis',''],
-  ['fin3',3,'Fluxo de caixa projetado (mínimo 90 dias)',''],
-  ['fin4',3,'Conferência da agenda com o faturamento antes do envio das guias',''],
-  ['fin5',3,'Controle de glosas e recursos com prazos por operadora',''],
-  ['fin6',2,'Conciliação dos pagamentos das operadoras com o faturado',''],
-  ['fin7',2,'Controle de recebimentos e inadimplência do particular',''],
-  ['fin8',2,'Cálculo e conferência do repasse aos profissionais por regra formal',''] ]}
+  ['reg24',2,'Contrato de sublocação ou uso de sala formalizado, com divisão de responsabilidades','Código Civil','autonomo'] ]}
 ];
 const DIAGX = Object.fromEntries(DIAG.flatMap(p => p.items.map(i => [i[0], { p, i }])));
 function dState(){ S.diag = S.diag || { r:{}, funil:{} }; S.diag.r = S.diag.r || {}; S.diag.funil = S.diag.funil || {}; return S.diag; }
@@ -3604,16 +3548,16 @@ function dGaps(){ const r = dState().r; const out = [];
   return out.sort((a,b) => b.peso - a.peso); }
 function dSet(id, k, v){ const r = dState().r; r[id] = r[id] || {}; r[id][k] = v; save(); if (k === 's') renderDiag(); }
 const FUNIL = [['leads','Contatos / leads recebidos'],['resp','Contatos respondidos'],['aval','Avaliações / 1ª consultas agendadas'],['avalr','Avaliações realizadas'],['inic','Pacientes que iniciaram tratamento'],['invest','Investimento em marketing (R$)'],['aval_google','Avaliações no Google (acumulado)'],['nota_google','Nota média no Google'],['nps','NPS do período']];
-let DGTAB = 'reg';
+let DGTAB = 'fat';
 function renderDiag(){
   const d = dState(); const ms = windowMonths(); const g = dGeral(); const [gl, gc] = healthLabel(g);
   const P = DIAG.find(p => p.k === DGTAB) || DIAG[0]; const sc = dScore(P); const gaps = dGaps();
   const f = (m, k) => toNum((d.funil[m]||{})[k]); const A = S.agenda.length ? agStats() : null;
-  $('pg_diag').innerHTML = head('Diagnóstico por pilares','Avaliação qualitativa da clínica: regulatório, comercial, agendamento, marketing, qualidade e gestão financeira. Cada item recebe um status; o painel calcula a nota de cada pilar e leva as pendências para o plano de ação.') + diagEloCard() + `
+  $('pg_diag').innerHTML = head('Diagnóstico por pilares','Avaliação qualitativa da clínica nos 6 pilares do Portal ELOGA: faturamento e ciclo de receita, financeiro e DRE, comercial (com marketing e NPS), agendamento e ocupação, qualidade e regulatório. Cada item recebe um status; o painel calcula a nota de cada pilar e leva as pendências para o plano de ação.') + diagEloCard() + `
   <div class="grid"><div class="card c4 isf ${gc}"><div class="kl"><span class="sig">IDP</span>Índice de Diagnóstico por Pilares</div><div class="isfv">${isNum(g) ? Math.round(g) : '—'}<small>/100</small></div><div class="isfl">${gl}</div><div class="bar"><i style="width:${isNum(g)?g:0}%"></i></div><div class="kd">Média das notas dos pilares avaliados. Itens críticos (peso 3) pesam três vezes mais que boas práticas (peso 1). "Não se aplica" não entra no cálculo.</div></div>
   <div class="card c8"><div class="chead"><h3>Nota por pilar</h3></div><div class="cwrap sm"><canvas id="ch_diag"></canvas></div><div class="howto"><b>Como ler:</b> 80+ adequado · 60–79 atenção · 40–59 risco · abaixo de 40 crítico. A barra só aparece para pilares com itens avaliados.</div></div></div>
-  <div class="subtabs">${DIAG.map(p => { const s = dScore(p); return `<button class="${DGTAB===p.k?'active':''}" onclick="DGTAB='${p.k}';renderDiag()">${p.n}${isNum(s.score)?` <span class="chip">${Math.round(s.score)}</span>`:''}${s.crit?` <span class="chip no">${s.crit} crítico(s)</span>`:''}</button>`; }).join('')}<button class="${DGTAB==='pos'?'active':''}" onclick="DGTAB='pos';renderDiag()">Posicionamento de marca${isNum(posScore().geral)?` <span class="chip">${Math.round(posScore().geral)}</span>`:''}</button><button class="${DGTAB==='funil'?'active':''}" onclick="DGTAB='funil';renderDiag()">Funil comercial e marketing (números)</button></div>
-  ${DGTAB === 'pos' ? posBody() : DGTAB === 'funil' ? `<div class="card"><h3>Funil comercial e indicadores de marketing</h3>
+  <div class="subtabs">${DIAG.map(p => { const s = dScore(p); return `<button class="${DGTAB===p.k?'active':''}" onclick="DGTAB='${p.k}';renderDiag()">${p.n}${isNum(s.score)?` <span class="chip">${Math.round(s.score)}</span>`:''}${s.crit?` <span class="chip no">${s.crit} crítico(s)</span>`:''}</button>`; }).join('')}<button class="${DGTAB==='pos'?'active':''}" onclick="DGTAB='pos';renderDiag()">Posicionamento de marca${isNum(posScore().geral)?` <span class="chip">${Math.round(posScore().geral)}</span>`:''}</button><button class="${DGTAB==='funil'?'active':''}" onclick="DGTAB='funil';renderDiag()">Funil comercial e marketing (números)</button><button class="${DGTAB==='mkt'?'active':''}" onclick="DGTAB='mkt';renderDiag()">Marketing e NPS (números)</button></div>
+  ${DGTAB === 'mkt' ? '<div id="pg_mkt" class="page active"></div>' : DGTAB === 'pos' ? posBody() : DGTAB === 'funil' ? `<div class="card"><h3>Funil comercial e indicadores de marketing</h3>
     <div class="tscroll"><table class="dgrid"><thead><tr><th class="fcol">Informação</th>${ms.map(m=>`<th>${monthLabel(m)}</th>`).join('')}</tr></thead><tbody>
     ${FUNIL.map(([k,l]) => `<tr><td class="fcol"><b>${l}</b></td>${ms.map(m => `<td><input class="gi" value="${isNum(f(m,k))?fmtNum(f(m,k), k==='nota_google'?1:0):''}" onchange="dState().funil['${m}']=Object.assign(dState().funil['${m}']||{},{${k}:toNum(this.value)});save();renderDiag()"></td>`).join('')}</tr>`).join('')}
     </tbody></table></div>
@@ -3628,6 +3572,7 @@ function renderDiag(){
     <div class="howto"><b>Como usar:</b> <b>Conforme</b> = existe e está em dia, com evidência. <b>Parcial</b> = existe, mas incompleto ou vencendo. <b>Não conforme</b> = não existe ou está vencido. <b>Não se aplica</b> não entra na nota. As bases legais são referências gerais: confirme sempre as exigências do município, do estado e de cada conselho profissional.</div></div>`}
   <div class="card"><div class="chead"><h3>Pendências priorizadas (todos os pilares)</h3></div>${gaps.length ? `<table class="tbl"><thead><tr><th>Pilar</th><th>Item</th><th>Status</th><th>Peso</th><th>Observação</th></tr></thead><tbody>${gaps.slice(0,25).map(x => `<tr><td>${esc(x.p.n)}</td><td>${esc(x.i[2])}</td><td><span class="chip ${x.o.s==='n'?'no':'warn'}">${DSTN[x.o.s][1]}</span></td><td class="num">${x.i[1]}</td><td><small>${esc(x.o.obs||'')}</small></td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma pendência registrada.</p>'}
   <div class="howto"><b>Como ler:</b> ordenadas por peso: itens críticos não conformes primeiro.</div></div>`;
+  if (DGTAB === 'mkt') renderMkt();
   const ps = DIAG.map(p => [p.n, dScore(p).score]).filter(x => isNum(x[1]));
   draw('ch_diag', ps.length ? { type:'bar', data:{ labels: ps.map(x=>x[0]), datasets:[{ label:'Nota', data: ps.map(x=>Math.round(x[1])), backgroundColor: ps.map(x => x[1] >= 80 ? PAL.good : x[1] >= 60 ? PAL.warn : PAL.bad) }] }, options:{ indexAxis:'y', plugins:{ legend:{ display:false }, vlabels:{ fmt: v => String(v) } }, scales:{ x:{ min:0, max:100 } } } } : null);
 }
@@ -3806,7 +3751,7 @@ const NAV_CLI = [
   ['1','Importação',[['importar','Importar arquivos'],['soon','Leitor de PDFs (autodiagnóstico, proposta, plano)'],['soon','Fluxo de caixa do cliente (planilha modelo)']]],
   ['2','Preenchimento',[['empresa','Cadastro do cliente'],['dados','Preencher dados'],['cad','Cadastros']]],
   ['3','Análise',[['exec','Visão executiva'],['agenda','Agenda e atendimentos'],['rent','Rentabilidade'],['ciclo','Ciclo de receita'],['fat','Faturamento e glosas'],['caixa','Caixa e recebimento'],['prod','Produção'],['rep','Repasse'],['fisc','Notas e impostos'],['ind','Indicadores']]],
-  ['4','Diagnóstico',[['diag','Diagnóstico por pilares'],['mkt','Marketing e NPS'],['estr','Estratégias']]],
+  ['4','Diagnóstico',[['diag','Diagnóstico por pilares'],['estr','Estratégias']]],
   ['5','Documentos',[['rel','Relatório'],['glos','Glossário']]]
 ];
 const NAV_CLOSED = {};
@@ -4417,7 +4362,7 @@ function autCommit(){
   S.aut = (S.aut || []).filter(b => !(norm(b.payer) === norm(payer) && b.ci === ci && b.cf === cf));
   S.aut.push({ id: uid(), payer, ci, cf, file: AUTIMP.o.file, fonte: AUTIMP.o.fonte, imported: new Date().toISOString(), rows });
   logImport('aut', rows.length, `${payer} · ${fmtNum(rows.reduce((s,r)=>s+r.aut,0))} sessões autorizadas`); AUTIMP = null; SIMP = null; workBox().innerHTML = ''; resetAll();
-  toast(`${rows.length} guias importadas.`, 'good'); FTAB = 'visao'; FATP = payer; show('fat'); }
+  toast(`${rows.length} guias importadas.`, 'good'); FTAB = 'visao'; FATP = payer; FT2 = 'funil'; show('fat'); }
 
 /* ---------- Pacotes de convênio (valor fixo por N sessões) ---------- */
 let _pkg = null;
@@ -4749,7 +4694,7 @@ function mktCommit(){ const K = MKIMP; const agg = mktAgg(); const M = mk().m; O
         Resumo do período · Faturamentos importados · Glosas · Importar
    ========================================================= */
 let FT2 = 'resumo', FOP = '', FSEL = null;
-const FT2TABS = [['resumo','Resumo do período'],['lotes','Faturamentos importados'],['glosas','Glosas e recursos'],['importar','Importar arquivos']];
+const FT2TABS = [['resumo','Resumo do período'],['funil','Autorizado → recebido'],['aut','Autorizações'],['conf','Conferência guia a guia'],['lotes','Faturamentos importados'],['glosas','Glosas e recursos'],['importar','Importar arquivos']];
 function fatStatus(b){ const t = todayIso(); const saldo = b.expected - b.paid;
   if (b.expected > 0 && saldo <= 0.01) return ['Pago','ok']; if (b.paid > 0) return [b.due && b.due < t ? 'Pago parcial · vencido' : 'Pago parcial','warn'];
   if (!b.envio) return ['Sem data de envio','']; if (b.due && b.due < t) return ['Vencido','no']; return ['Aguardando pagamento','']; }
@@ -4776,9 +4721,10 @@ function renderFat(){
     <span class="muted">${nFat ? `${nFat} arquivo(s) de faturamento importado(s). Os números seguem o <b>período</b> (acima) e a <b>operadora</b> selecionados.` : 'Nenhum faturamento importado ainda.'}</span></div></div>
   <div class="subtabs">${FT2TABS.map(([k,l]) => `<button class="${FT2===k?'active':''}" onclick="FT2='${k}';FSEL=null;renderFat()">${l}</button>`).join('')}</div>
   <div id="fatWork"></div>
-  ${!nFat && FT2 !== 'importar' ? `<div class="card">${notice('warn', '<b>Nenhum faturamento importado.</b> Use a aba <b>Importar arquivos</b> para enviar a planilha de faturamento enviado, o demonstrativo de análise ou os recebimentos.')}<button class="btn" onclick="FT2='importar';renderFat()">Ir para Importar arquivos</button></div>` : ''}
+  ${FT2 === 'funil' ? fatFunil() : ''}${FT2 === 'aut' ? fatAut() : ''}${FT2 === 'conf' ? fatConfGuia() : ''}
+  ${!nFat && !['importar','funil','aut','conf'].includes(FT2) ? `<div class="card">${notice('warn', '<b>Nenhum faturamento importado.</b> Use a aba <b>Importar arquivos</b> para enviar a planilha de faturamento enviado, o demonstrativo de análise ou os recebimentos.')}<button class="btn" onclick="FT2='importar';renderFat()">Ir para Importar arquivos</button></div>` : ''}
   ${nFat && FT2 === 'resumo' ? fatResumo() : ''}${nFat && FT2 === 'lotes' ? (FSEL ? fatDetalhe() : fatLotes()) : ''}${nFat && FT2 === 'glosas' ? fatGlosas() : ''}${FT2 === 'importar' ? fatImportar() : ''}`;
-  if (nFat && FT2 === 'resumo') fatResumoCharts(); if (nFat && FT2 === 'glosas') fatGlosasChart(); if (FT2 === 'lotes' && FSEL) fatDetalheChart();
+  if (FT2 === 'funil' && typeof fatFunilCharts === 'function') fatFunilCharts(); if (nFat && FT2 === 'resumo') fatResumoCharts(); if (nFat && FT2 === 'glosas') fatGlosasChart(); if (FT2 === 'lotes' && FSEL) fatDetalheChart();
 }
 
 /* ---------- 1. Resumo do período ---------- */
