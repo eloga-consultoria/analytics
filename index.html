@@ -751,7 +751,7 @@ const GLOSSARY = [
   ['p.p.','Pontos percentuais','Diferença entre dois percentuais (ex.: de 8% para 5% = −3 p.p.).'],
   ['Pareto 80/20','Priorização por concentração','Poucas causas costumam responder pela maior parte da perda.'],
   ['Curva ABC','Classificação por relevância','A = itens que somam 80% do valor; B = próximos 15%; C = últimos 5%.'],
-  ['5W2H','Plano de ação','O quê, por quê, quem, quando, onde, como e quanto custa.'],
+  ['PDCA','Ciclo de melhoria contínua','Planejar, executar, verificar e agir. É o método do plano de ação importado do Painel Mestre.'],
   ['SWOT','Forças, fraquezas, oportunidades e ameaças','Leitura estratégica interna e externa.'],
   ['6M / Ishikawa','Causa raiz','Método, mão de obra, máquina/sistema, material, medida e meio ambiente.'],
   ['ISF','Índice de Saúde Financeira ELOGA','Nota de 0 a 100 que resume rentabilidade, ciclo de receita, liquidez e eficiência.']
@@ -829,7 +829,8 @@ function blankClient(){
     agenda: [],               // agendamentos importados (pseudonimizados)
     cad: { payers: [], table: [], profs: [], statusMap: {}, statusOK: false, clinic: { hours: {}, rooms: '', slot: 50 }, formas: [{nome:'PIX',taxa:0},{nome:'Dinheiro',taxa:0},{nome:'Cartão de débito',taxa:1.5},{nome:'Cartão de crédito à vista',taxa:3.2},{nome:'Cartão de crédito parcelado',taxa:4.9}], cfg: { holidays:'' }, salas: [], pacotes: [], kit: { ins:[], cons:[], eq:[], forn:[], proc:[] } },
     targets: {},              // metas por indicador
-    actions: [],              // plano 5W2H editado
+    actions: [],              // legado (5W2H removido na v3; dados antigos preservados)
+    pdca: null,               // plano PDCA importado do Painel Mestre
     swot: null,               // SWOT editada
     scen: { glosa:1, faltas:2, missing:1, ocup:5, preco:3, fixos:5 },
     imports: [],
@@ -1253,7 +1254,7 @@ function consistency(){
 }
 
 /* =========================================================
-   03 - Motor de estratégias: achados, priorização, 5W2H,
+   03 - Motor de estratégias: achados, priorização, PDCA,
         causa raiz (6M), SWOT e cenários
    ========================================================= */
 const CTRL = { 3:'Alta', 2:'Média', 1:'Baixa' };
@@ -1501,14 +1502,34 @@ function dataGaps(){
   return out;
 }
 
-/* ---------- Plano de ação 5W2H (sugestões + edições) ---------- */
-function actionPlan(){
-  const F = findings().slice(0, 12);
-  const saved = S.actions || [];
-  const byId = Object.fromEntries(saved.filter(a => a.src).map(a => [a.src, a]));
-  const plan = F.map(f => Object.assign({ src:f.id, what:f.what, why:f.diag, who:f.who, when:f.when, where:f.area, how:f.how, cost:f.cost, prio:f.prio, status:'Não iniciado', auto:true }, byId[f.id] || {}, { prio: f.prio, auto:true })).filter(a => !a.hidden);
-  const custom = saved.filter(a => !a.src || a.custom);
-  return plan.concat(custom.filter(a => a.custom));
+/* ---------- Plano de ação PDCA (importado do Painel Mestre) ---------- */
+const PDCA_PIL = { faturamento:'Faturamento e ciclo de receita', financeiro:'Financeiro e DRE', comercial:'Comercial (com Marketing e NPS)', operacional:'Agendamento e ocupação', qualidade:'Qualidade e experiência do paciente', regulatorio:'Regulatório' };
+function pdcaList(c){ c = c || S; return (c.pdca && c.pdca.plano) || []; }
+function pdcaStats(c){ const l = pdcaList(c); const hoje = new Date().toISOString().slice(0,10); const done = l.filter(x => /conclu/i.test(x.status||'')).length; const late = l.filter(x => x.when && x.when < hoje && !/conclu/i.test(x.status||'')).length; const prog = l.length ? Math.round(l.reduce((s,x)=>s+(+x.progresso||0),0)/l.length) : 0; return { n:l.length, done, late, prog }; }
+function importPdca(){
+  const inp = $('fileJson'); inp.value = '';
+  inp.onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader();
+    r.onload = () => { try { const d = JSON.parse(r.result); const db = d.DB || d; const cl = db.clients ? Object.values(db.clients) : (db.plano ? [db] : []);
+      if (!cl.length) throw new Error('não encontrei clientes neste arquivo (esperado: JSON do ELOGA Painel Mestre)');
+      const mine = norm(S.meta.tradeName || S.meta.company || ''); let c = cl.find(x => mine && (norm(x.nome||'').includes(mine) || mine.includes(norm(x.nome||''))));
+      if (!c) { if (cl.length === 1) { if (!confirm(`O arquivo traz o cliente "${cl[0].nome}", diferente de "${S.meta.tradeName||S.meta.company||'este cliente'}". Importar mesmo assim?`)) return; c = cl[0]; } else throw new Error('o arquivo tem vários clientes e nenhum corresponde ao nome do cliente aberto'); }
+      S.pdca = { fonte:'Painel Mestre (JSON)', importadoEm:new Date().toISOString(), nome:c.nome||'', plano:c.plano||[], swot:c.swot||null, periodoInicio:c.periodoInicio||'', periodoFim:c.periodoFim||'', relatorios:c.relatorios||{}, socios:c.socios||'' };
+      save(true); toast(`Plano PDCA importado: ${S.pdca.plano.length} demandas.`, 'good'); if (PAGE === 'estr') renderEstr();
+    } catch(x){ toast('Não foi possível ler o plano: ' + x.message, 'bad'); } };
+    r.readAsText(f); };
+  inp.click();
+}
+function pdcaCard(){
+  const l = pdcaList(); const st = pdcaStats(); const p = S.pdca;
+  const head = `<div class="chead"><h3>Plano de ação PDCA <span class="muted">(do Painel Mestre)</span></h3><div class="row" style="margin:0"><button class="btn sm" onclick="importPdca()">${l.length ? 'Reimportar' : 'Importar plano (JSON)'}</button><button class="btn sm ghost" disabled title="Em breve">Importar PDF (em breve)</button></div></div>`;
+  if (!l.length) return `<div class="card">${head}${notice('', 'Nenhum plano importado. No Painel Mestre, exporte o <b>JSON</b> do cliente e importe aqui. O plano passa a aparecer nesta tela e nos relatórios.')}</div>`;
+  const hoje = new Date().toISOString().slice(0,10); const pil = [...new Set(l.map(x => x.pilar))];
+  const stc = s => /conclu/i.test(s||'') ? 'ok' : /andamento/i.test(s||'') ? 'warn' : '';
+  return `<div class="card">${head}
+  <div class="row" style="gap:10px;margin:0 0 10px"><span class="chip ok">${st.n} demandas</span><span class="chip">${st.done} concluídas</span><span class="chip ${st.late?'bad':''}">${st.late} atrasadas</span><span class="chip">Progresso médio ${st.prog}%</span><span class="muted"><small>Fonte: ${esc(p.fonte)} · importado em ${new Date(p.importadoEm).toLocaleDateString('pt-BR')}${p.periodoInicio?` · período ${esc(p.periodoInicio)} a ${esc(p.periodoFim||'')}`:''}</small></span></div>
+  <div class="tscroll"><table class="tbl"><thead><tr><th>Pilar</th><th>Demanda (o que fazer)</th><th>Por quê</th><th>Responsável</th><th>Prazo</th><th>Status</th><th>Progresso</th><th>Indicador / meta</th></tr></thead><tbody>
+  ${pil.map(k => l.filter(x => x.pilar === k).map((x,i) => `<tr>${i===0?`<td rowspan="${l.filter(y=>y.pilar===k).length}"><b>${esc(PDCA_PIL[k]||k)}</b></td>`:''}<td>${esc(x.what||'')}</td><td><small>${esc(x.why||'')}</small></td><td>${esc(x.who||'')}</td><td class="${x.when && x.when < hoje && !/conclu/i.test(x.status||'') ? 'neg' : ''}">${x.when ? new Date(x.when+'T12:00').toLocaleDateString('pt-BR') : ''}</td><td><span class="chip ${stc(x.status)}">${esc(x.status||'')}</span></td><td class="num">${+x.progresso||0}%</td><td><small>${esc([x.indicador, x.meta].filter(Boolean).join(' · '))}</small></td></tr>`).join('')).join('')}
+  </tbody></table></div><div class="howto"><b>Como ler:</b> o plano é mantido no Painel Mestre (método PDCA). Aqui ele é só lido: para alterar status ou prazo, atualize lá e reimporte.</div></div>`;
 }
 
 /* ---------- SWOT sugerida ---------- */
@@ -2071,19 +2092,16 @@ function setTarget(id, v){ S.targets = S.targets || {}; const n = toNum(v); if (
 
 /* ---------- Estratégias ---------- */
 function renderEstr(){
-  const F = findings(); const plan = actionPlan(); const sw = swot(); const sc = scenarios();
+  const F = findings(); const sw = swot(); const sc = scenarios();
   const slider = (k, l, max, step, unitTxt) => `<div class="sl"><label>${l}: <b id="sv_${k}">${S.scen[k]}${unitTxt}</b></label><input type="range" min="0" max="${max}" step="${step}" value="${S.scen[k]}" oninput="S.scen['${k}']=+this.value;$('sv_${k}').textContent=this.value+'${unitTxt}';save();scenRefresh()"></div>`;
-  $('pg_estr').innerHTML = head('Estratégias e plano de ação','Achados priorizados por impacto, recorrência e controlabilidade; causas prováveis; plano 5W2H; SWOT e simulação de cenários.') + emptyState() + `
+  $('pg_estr').innerHTML = head('Estratégias e plano de ação','Achados priorizados por impacto, recorrência e controlabilidade; causas prováveis; plano de ação PDCA importado; SWOT e simulação de cenários.') + emptyState() + `
   <div class="card"><div class="chead"><h3>Matriz de priorização (Impacto × Recorrência × Controlabilidade)</h3><div class="row" style="margin:0"><button class="btn sm" onclick="addFinding()">+ Achado</button>${hiddenFindings().length?`<button class="btn sm ghost" onclick="Object.values(S.fEdit).forEach(e=>e.hidden=false);S.fCustom.forEach(c=>{});save();renderEstr()">Restaurar ${hiddenFindings().length} excluído(s)</button>`:''}</div></div>
   ${F.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>#</th><th>Achado</th><th>Área</th><th>Situação atual</th><th title="Estimativa mensal de perda ou ganho potencial">Impacto/mês</th><th title="Em quantos meses do período o problema apareceu">Recorrência</th><th title="Quanto a clínica controla a causa">Controlabilidade</th><th>Prioridade</th><th></th></tr></thead><tbody>
   ${F.map((f,i) => `<tr><td>${i+1}</td><td><div class="ce b" contenteditable="true" onblur="fEdit('${f.id}','title',this.innerText)">${esc(f.title)}</div><div class="ce" contenteditable="true" onblur="fEdit('${f.id}','diag',this.innerText)"><small>${esc(f.diag)}</small></div></td><td>${esc(f.area)}</td><td class="num">${esc(f.cur||'—')}${f.ref?`<br><small>ref. ${esc(f.ref)}</small>`:''}</td><td class="num">${f.impact?fmtMoney(f.impact):'—'}<br><small>${esc(f.impType)}</small></td><td class="num">${f.rec||1}/${windowMonths().length}</td><td>${CTRL[f.ctrl]}</td><td><select onchange="fEdit('${f.id}','prio',this.value)">${['Alta','Média','Baixa'].map(o=>`<option ${f.prio===o?'selected':''}>${o}</option>`).join('')}</select></td><td><button class="lnk" onclick="fEdit('${f.id}','hidden',true)">excluir</button></td></tr>`).join('')}
   </tbody></table></div>` : notice('good','<b>Nenhum desvio identificado</b> nos indicadores disponíveis. Complete os dados para ampliar o diagnóstico.')}
   <div class="howto"><b>Como ler:</b> a prioridade combina o <b>impacto financeiro</b> (50%), a <b>recorrência</b> nos meses do período (25%) e a <b>controlabilidade</b>, isto é, quanto a solução depende só da clínica (25%). Impactos são estimativas para ordenar ações, não valores contábeis.</div></div>
   ${F.length ? `<div class="card"><div class="chead"><h3>Causa raiz provável — 6M (Ishikawa) dos 3 principais achados</h3></div><div class="grid">${F.slice(0,3).map(f => `<div class="c4 m6"><h4>${esc(f.title)}</h4>${Object.keys(f.m6||{}).length ? Object.entries(f.m6).map(([k,v]) => `<div><span class="sig">${k}</span>${v.map(esc).join('; ')}</div>`).join('') : '<small class="muted">Investigar com a equipe usando os 5 Porquês.</small>'}</div>`).join('')}</div><div class="howto"><b>Como ler:</b> hipóteses de causa para validar com a equipe (método, mão de obra, máquina/sistema, material, medida e meio ambiente). Confirme com os 5 Porquês antes de agir.</div></div>` : ''}
-  <div class="card"><div class="chead"><h3>Plano de ação 5W2H</h3><div class="row" style="margin:0"><button class="btn sm" onclick="addAction()">+ Ação</button><button class="btn sm pdf" onclick="exportPlanPDF()">Material do plano de ação (PDF)</button></div></div>
-  <div class="tscroll"><table class="tbl w2h"><thead><tr><th>Prior.</th><th title="O quê">O quê (What)</th><th title="Por quê">Por quê (Why)</th><th title="Quem">Quem (Who)</th><th title="Quando">Quando (When)</th><th title="Onde">Onde (Where)</th><th title="Como">Como (How)</th><th title="Quanto custa">Quanto (How much)</th><th>Status</th></tr></thead><tbody>
-  ${plan.map((a,i) => `<tr><td><span class="pr p${a.prio||'Média'}">${a.prio||'—'}</span><br><button class="lnk" onclick="delAction(${i})">excluir</button></td>${['what','why','who','when','where','how','cost'].map(k => `<td><div class="ce" contenteditable="true" data-i="${i}" data-k="${k}" onblur="editAction(this)">${esc(a[k]||'')}</div></td>`).join('')}<td><select onchange="editAction(this)" data-i="${i}" data-k="status">${['Não iniciado','Em andamento','Concluído','Cancelado'].map(o=>`<option ${a.status===o?'selected':''}>${o}</option>`).join('')}</select></td></tr>`).join('') || `<tr><td colspan="9" class="muted">Sem ações sugeridas. Use “+ Ação” para incluir manualmente.</td></tr>`}
-  </tbody></table></div><div class="howto"><b>Como ler:</b> ações sugeridas a partir dos achados. Clique em qualquer célula para editar; as edições são salvas e vão para o relatório. <b>5W2H</b> = o quê, por quê, quem, quando, onde, como e quanto custa.</div></div>
+  ${pdcaCard()}
   <div class="grid"><div class="card c7"><div class="chead"><h3>SWOT financeira</h3><button class="btn sm ghost" onclick="S.swot=null;save();renderEstr()">Regerar sugestões</button></div>
   <div class="swot">${[['f','Forças','Interno · positivo'],['fr','Fraquezas','Interno · negativo'],['o','Oportunidades','Externo/potencial · positivo'],['a','Ameaças','Externo/risco · negativo']].map(([k,l,s]) => `<div class="sw ${k}"><b>${l}</b><small>${s}</small><textarea data-k="${k}" oninput="S.swot=Object.assign({},swot(),{[this.dataset.k]:this.value});save()">${esc(sw[k])}</textarea></div>`).join('')}</div>
   <div class="howto"><b>Como ler:</b> sugestão automática a partir dos indicadores (uma linha por item). Edite livremente: o texto editado é o que vai para o relatório.</div></div>
@@ -2103,24 +2121,11 @@ function scenRefresh(){
     <div class="howto"><b>Como ler:</b> ${CHART_NOTES.scen} Faltas e ocupação consideram a margem de contribuição (o atendimento extra tem custo variável).</div>`;
   draw('ch_scen', cfgScen());
 }
-function editAction(el){
-  const plan = actionPlan(); const i = +el.dataset.i; const k = el.dataset.k; const a = plan[i]; if (!a) return;
-  const val = el.tagName === 'SELECT' ? el.value : el.innerText.trim();
-  S.actions = S.actions || [];
-  if (a.custom) { const idx = S.actions.indexOf(S.actions.filter(x=>x.custom)[i - plan.filter(p=>!p.custom).length]); if (idx >= 0) S.actions[idx][k] = val; }
-  else { let o = S.actions.find(x => x.src === a.src && !x.custom); if (!o) { o = { src: a.src }; S.actions.push(o); } o[k] = val; }
-  save();
-}
-function addAction(){ S.actions = S.actions || []; S.actions.push({ custom:true, what:'Nova ação', why:'', who:'', when:'', where:'', how:'', cost:'', prio:'Média', status:'Não iniciado' }); save(); renderEstr(); }
-function delAction(i){ const plan = actionPlan(); const a = plan[i]; if (!a) return;
-  if (a.custom) { const customs = S.actions.filter(x=>x.custom); const idx = S.actions.indexOf(customs[i - plan.filter(p=>!p.custom).length]); if (idx >= 0) S.actions.splice(idx,1); }
-  else { let o = S.actions.find(x => x.src === a.src && !x.custom); if (!o) { o = { src:a.src }; S.actions.push(o); } o.hidden = true; }
-  save(); renderEstr(); }
 function fEdit(id, k, v){ S.fEdit = S.fEdit || {}; const e = (S.fEdit[id] = S.fEdit[id] || {}); e[k] = typeof v === 'string' ? v.trim() : v; const c = (S.fCustom||[]).find(x => x.id === id); if (c && k !== 'hidden') c[k] = e[k]; if (c && k === 'hidden') S.fCustom = S.fCustom.filter(x => x.id !== id); save(); if (k === 'hidden' || k === 'prio') renderEstr(); }
 function addFinding(){ S.fCustom = S.fCustom || []; S.fCustom.push({ id: 'c' + uid(), title:'Novo achado', diag:'Descreva o problema identificado.', prio:'Média', area:'Manual', what:'', who:'', how:'', when:'' }); save(); renderEstr(); }
 
 /* ---------- Relatório ---------- */
-const SECTIONS = [['capa','Capa'],['exec','Sumário executivo (ISF, completude, prioridades)'],['diag','Diagnóstico por pilares (regulatório, comercial, agendamento, marketing, qualidade)'],['pos','Posicionamento de marca'],['mkt','Marketing, redes sociais e NPS'],['agenda','Agenda e atendimentos (se importada)'],['fat','Faturamento e glosas'],['rep','Repasse aos profissionais'],['funil','Funil da receita'],['dre','DRE gerencial e margens'],['graf','Gráficos com interpretação'],['ind','Quadro de indicadores com legenda'],['pareto','Pareto de glosas e curva ABC (se houver dados detalhados)'],['plano','Matriz de priorização e plano 5W2H'],['acomp','Acompanhamento do projeto (Gestão ELOGA)'],['swot','SWOT financeira'],['cen','Simulação de cenários'],['gaps','Dados ausentes e controles recomendados'],['gloss','Glossário de siglas e nota metodológica']];
+const SECTIONS = [['capa','Capa'],['exec','Sumário executivo (ISF, completude, prioridades)'],['diag','Diagnóstico por pilares (regulatório, comercial, agendamento, marketing, qualidade)'],['pos','Posicionamento de marca'],['mkt','Marketing, redes sociais e NPS'],['agenda','Agenda e atendimentos (se importada)'],['fat','Faturamento e glosas'],['rep','Repasse aos profissionais'],['funil','Funil da receita'],['dre','DRE gerencial e margens'],['graf','Gráficos com interpretação'],['ind','Quadro de indicadores com legenda'],['pareto','Pareto de glosas e curva ABC (se houver dados detalhados)'],['plano','Matriz de priorização e plano de ação (PDCA)'],['acomp','Acompanhamento do projeto (Gestão ELOGA)'],['swot','SWOT financeira'],['cen','Simulação de cenários'],['gaps','Dados ausentes e controles recomendados'],['gloss','Glossário de siglas e nota metodológica']];
 function renderRel(){
   const r = S.report;
   $('pg_rel').innerHTML = head('Relatório em PDF','Relatório estruturado em papel timbrado ELOGA, com gráficos e legendas.') + `
@@ -2405,7 +2410,6 @@ const PDF_C = { petro:[1,28,39], roxo:[82,17,251], lima:[226,250,2], teal:[0,166
 const pdfTxt = s => String(s ?? '').replace(/[  ]/g,' ').replace(/≥/g,'>=').replace(/≤/g,'<=').replace(/→/g,'->').replace(/[—–−]/g,'-').replace(/•/g,'-').replace(/…/g,'...').replace(/✓/g,'(ok)').replace(/✗/g,'(x)').replace(/[▲▼]\s?/g,'').replace(/[●○]/g,'').replace(/[“”]/g,'"').replace(/[‘’]/g,"'").replace(/[^\x00-\xFF]/g,'');
 
 let PDF_KIND = 'full';
-async function exportPlanPDF(){ PDF_KIND = 'plano'; try { await exportPDF(); } finally { PDF_KIND = 'full'; } }
 async function exportPDF(){
   if (!window.jspdf) return toast('Gerador de PDF indisponível.', 'bad');
   loader('Gerando relatório em PDF...');
@@ -2648,18 +2652,15 @@ function buildPDF(){
   }
 
   /* ===== PRIORIZAÇÃO E PLANO ===== */
-  if (sec.plano && (F.length || actionPlan().length)) {
+  if (sec.plano && (F.length || pdcaList().length)) {
     newPage(); if (F.length) { title((PK === 'plano' ? '' : '7. ') + 'Priorização e plano de ação', `Achados ordenados por impacto financeiro (50%), recorrência nos meses do período (25%) e controlabilidade da causa (25%).`);
     table(['#','Achado','Área','Atual','Impacto/mês','Recorr.','Control.','Prior.'], F.map((f,i) => [i+1, f.title, f.area, f.cur || '-', f.impact ? fmtMoney(f.impact) : '-', `${f.rec||1}/${ms.length}`, CTRL[f.ctrl], f.prio]),
       { columnStyles:{ 0:{cellWidth:6}, 1:{cellWidth:60}, 4:{halign:'right'}, 5:{halign:'center'}, 6:{halign:'center'} }, didParseCell: d => { if (d.section==='body' && d.column.index===7) { const p = d.cell.raw; d.cell.styles.fontStyle='bold'; d.cell.styles.textColor = p==='Alta'?PDF_C.bad:p==='Média'?PDF_C.warn:PDF_C.muted; } } });
     legend('Impacto: estimativa mensal de perda ou ganho potencial, usada para ordenar ações (não é valor contábil). Recorrência: em quantos meses do período o problema apareceu. Controlabilidade: Alta = depende só da clínica; Baixa = depende de operadora ou mercado.', 'Legenda');
     sub('Causa raiz provável (6M) dos principais achados');
     table(['Achado','Hipóteses de causa (método, mão de obra, máquina/sistema, material, medida, meio ambiente)'], F.slice(0,3).map(f => [f.title, Object.entries(f.m6||{}).map(([k,v]) => `${k}: ${v.join('; ')}`).join('\n') || 'Investigar com a equipe usando os 5 Porquês.']), { columnStyles:{ 0:{ cellWidth:50, fontStyle:'bold' } } });
-    } else title('Plano de ação', 'Ações definidas a partir do diagnóstico por pilares.');
-    sub('Plano de ação 5W2H');
-    const plan = actionPlan();
-    table(['Prior.','O quê','Por quê','Quem','Quando','Como','Quanto','Status'], plan.map(a => [a.prio||'-', a.what, a.why, a.who, a.when, a.how, a.cost, a.status||'Não iniciado']), { styles:{ fontSize:6.6, cellPadding:1.3 }, columnStyles:{ 0:{cellWidth:11}, 1:{cellWidth:26}, 2:{cellWidth:36}, 3:{cellWidth:20}, 4:{cellWidth:16}, 5:{cellWidth:40}, 6:{cellWidth:14} } });
-    legend('5W2H: What (o quê), Why (por quê), Who (quem), When (quando), Where (onde - área indicada na priorização), How (como) e How much (quanto custa).', 'Legenda');
+    } else title('Plano de ação', 'Ações do plano PDCA do cliente.');
+    { const PL = pdcaList(); if (PL.length) { sub('Plano de ação (PDCA)'); table(['Pilar','Demanda','Responsável','Prazo','Status','Progresso'], PL.map(x => [PDCA_PIL[x.pilar]||x.pilar, x.what, x.who, x.when ? new Date(x.when+'T12:00').toLocaleDateString('pt-BR') : '', x.status, (+x.progresso||0)+'%']), { styles:{ fontSize:6.8, cellPadding:1.3 }, columnStyles:{ 0:{cellWidth:28}, 1:{cellWidth:80}, 2:{cellWidth:24}, 3:{cellWidth:16}, 4:{cellWidth:18}, 5:{cellWidth:14} } }); } }
   }
 
   /* ===== ACOMPANHAMENTO DO PROJETO (Gestão ELOGA) ===== */
@@ -3602,10 +3603,6 @@ function dGaps(){ const r = dState().r; const out = [];
   DIAG.forEach(p => dItems(p).forEach(i => { const o = r[i[0]] || {}; if (o.s === 'n' || o.s === 'p') out.push({ p, i, o, peso: i[1] * (o.s === 'n' ? 1 : 0.5) }); }));
   return out.sort((a,b) => b.peso - a.peso); }
 function dSet(id, k, v){ const r = dState().r; r[id] = r[id] || {}; r[id][k] = v; save(); if (k === 's') renderDiag(); }
-function dToPlan(){ const g = dGaps(); S.actions = S.actions || []; let n = 0;
-  g.forEach(x => { const src = 'diag:' + x.i[0]; if (S.actions.some(a => a.dsrc === src)) return;
-    S.actions.push({ custom:true, dsrc:src, what: x.i[2], why: `${x.p.n}: item ${x.o.s === 'n' ? 'não conforme' : 'parcialmente conforme'}${x.o.obs ? ' — ' + x.o.obs : ''}${x.i[3] ? ' (' + x.i[3] + ')' : ''}`, who: x.o.resp || '', when: x.o.prazo || (x.i[1] === 3 ? '30 dias' : '60 dias'), where: x.p.n, how:'', cost:'', prio: x.i[1] === 3 && x.o.s === 'n' ? 'Alta' : x.i[1] >= 2 ? 'Média' : 'Baixa', status:'Não iniciado' }); n++; });
-  save(); toast(n ? `${n} ação(ões) incluída(s) no plano 5W2H.` : 'Os itens pendentes já estão no plano.', 'good'); }
 const FUNIL = [['leads','Contatos / leads recebidos'],['resp','Contatos respondidos'],['aval','Avaliações / 1ª consultas agendadas'],['avalr','Avaliações realizadas'],['inic','Pacientes que iniciaram tratamento'],['invest','Investimento em marketing (R$)'],['aval_google','Avaliações no Google (acumulado)'],['nota_google','Nota média no Google'],['nps','NPS do período']];
 let DGTAB = 'reg';
 function renderDiag(){
@@ -3614,7 +3611,7 @@ function renderDiag(){
   const f = (m, k) => toNum((d.funil[m]||{})[k]); const A = S.agenda.length ? agStats() : null;
   $('pg_diag').innerHTML = head('Diagnóstico por pilares','Avaliação qualitativa da clínica: regulatório, comercial, agendamento, marketing, qualidade e gestão financeira. Cada item recebe um status; o painel calcula a nota de cada pilar e leva as pendências para o plano de ação.') + diagEloCard() + `
   <div class="grid"><div class="card c4 isf ${gc}"><div class="kl"><span class="sig">IDP</span>Índice de Diagnóstico por Pilares</div><div class="isfv">${isNum(g) ? Math.round(g) : '—'}<small>/100</small></div><div class="isfl">${gl}</div><div class="bar"><i style="width:${isNum(g)?g:0}%"></i></div><div class="kd">Média das notas dos pilares avaliados. Itens críticos (peso 3) pesam três vezes mais que boas práticas (peso 1). "Não se aplica" não entra no cálculo.</div></div>
-  <div class="card c8"><div class="chead"><h3>Nota por pilar</h3><button class="btn sm" onclick="dToPlan()">Levar pendências para o plano 5W2H</button></div><div class="cwrap sm"><canvas id="ch_diag"></canvas></div><div class="howto"><b>Como ler:</b> 80+ adequado · 60–79 atenção · 40–59 risco · abaixo de 40 crítico. A barra só aparece para pilares com itens avaliados.</div></div></div>
+  <div class="card c8"><div class="chead"><h3>Nota por pilar</h3></div><div class="cwrap sm"><canvas id="ch_diag"></canvas></div><div class="howto"><b>Como ler:</b> 80+ adequado · 60–79 atenção · 40–59 risco · abaixo de 40 crítico. A barra só aparece para pilares com itens avaliados.</div></div></div>
   <div class="subtabs">${DIAG.map(p => { const s = dScore(p); return `<button class="${DGTAB===p.k?'active':''}" onclick="DGTAB='${p.k}';renderDiag()">${p.n}${isNum(s.score)?` <span class="chip">${Math.round(s.score)}</span>`:''}${s.crit?` <span class="chip no">${s.crit} crítico(s)</span>`:''}</button>`; }).join('')}<button class="${DGTAB==='pos'?'active':''}" onclick="DGTAB='pos';renderDiag()">Posicionamento de marca${isNum(posScore().geral)?` <span class="chip">${Math.round(posScore().geral)}</span>`:''}</button><button class="${DGTAB==='funil'?'active':''}" onclick="DGTAB='funil';renderDiag()">Funil comercial e marketing (números)</button></div>
   ${DGTAB === 'pos' ? posBody() : DGTAB === 'funil' ? `<div class="card"><h3>Funil comercial e indicadores de marketing</h3>
     <div class="tscroll"><table class="dgrid"><thead><tr><th class="fcol">Informação</th>${ms.map(m=>`<th>${monthLabel(m)}</th>`).join('')}</tr></thead><tbody>
@@ -3630,14 +3627,14 @@ function renderDiag(){
     </tbody></table></div>
     <div class="howto"><b>Como usar:</b> <b>Conforme</b> = existe e está em dia, com evidência. <b>Parcial</b> = existe, mas incompleto ou vencendo. <b>Não conforme</b> = não existe ou está vencido. <b>Não se aplica</b> não entra na nota. As bases legais são referências gerais: confirme sempre as exigências do município, do estado e de cada conselho profissional.</div></div>`}
   <div class="card"><div class="chead"><h3>Pendências priorizadas (todos os pilares)</h3></div>${gaps.length ? `<table class="tbl"><thead><tr><th>Pilar</th><th>Item</th><th>Status</th><th>Peso</th><th>Observação</th></tr></thead><tbody>${gaps.slice(0,25).map(x => `<tr><td>${esc(x.p.n)}</td><td>${esc(x.i[2])}</td><td><span class="chip ${x.o.s==='n'?'no':'warn'}">${DSTN[x.o.s][1]}</span></td><td class="num">${x.i[1]}</td><td><small>${esc(x.o.obs||'')}</small></td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma pendência registrada.</p>'}
-  <div class="howto"><b>Como ler:</b> ordenadas por peso: itens críticos não conformes primeiro. O botão "Levar pendências para o plano 5W2H" cria uma ação para cada item na aba Estratégias, onde podem ser editadas.</div></div>`;
+  <div class="howto"><b>Como ler:</b> ordenadas por peso: itens críticos não conformes primeiro.</div></div>`;
   const ps = DIAG.map(p => [p.n, dScore(p).score]).filter(x => isNum(x[1]));
   draw('ch_diag', ps.length ? { type:'bar', data:{ labels: ps.map(x=>x[0]), datasets:[{ label:'Nota', data: ps.map(x=>Math.round(x[1])), backgroundColor: ps.map(x => x[1] >= 80 ? PAL.good : x[1] >= 60 ? PAL.warn : PAL.bad) }] }, options:{ indexAxis:'y', plugins:{ legend:{ display:false }, vlabels:{ fmt: v => String(v) } }, scales:{ x:{ min:0, max:100 } } } } : null);
 }
 
 function diagEloCard(){
-  const c = (typeof eloOf === 'function') ? eloOf(S.id) : null; const acts = (S.actions||[]).filter(a => a.custom); const done = acts.filter(a => a.status === 'Concluído').length;
-  const btn = `<button class="btn sm pdf" onclick="exportPlanPDF()">Material do plano de ação (PDF)</button><button class="btn sm ghost" onclick="show('estr')">Editar plano 5W2H (${done}/${acts.length} concluídas)</button>`;
+  const c = (typeof eloOf === 'function') ? eloOf(S.id) : null; const ps = pdcaStats();
+  const btn = `<button class="btn sm ghost" onclick="show('estr')">Plano PDCA (${ps.done}/${ps.n} concluídas)</button>`;
   if (!c) return `<div class="card linkbar"><div><b>Projeto na Gestão ELOGA:</b> <span class="muted">este cliente ainda não está ligado a um contrato. Em Gestão ELOGA › Clientes, escolha este cliente na coluna "Cliente no Analytics".</span></div><div class="row" style="margin:0">${btn}</div></div>`;
   const F = farol(c); const A = adesao(c.id); const R = resultados(c.id); const ab = E2().dem.filter(x => x.cliente === c.id && !['Entregue','Cancelada'].includes(x.status)).length;
   return `<div class="card linkbar"><div><b>Projeto na Gestão ELOGA:</b> ${DOT(F.geral)} ${esc(c.nome||'')} · fase <b>${esc(c.fase||'não definida')}</b> · adesão ${isNum(A.idx) ? fmtPct(A.idx,0) : '—'} · ${ab} demanda(s) em aberto · avanço das metas ${fmtPct(R.av,0)} <button class="lnk" style="color:var(--roxo)" onclick="show('e_proj')">abrir projeto</button></div><div class="row" style="margin:0">${btn}</div></div>`;
@@ -3665,10 +3662,7 @@ function posScore(){ const P = S.diag && S.diag.pos; const a = (P && P.a) || {};
   return { pil, geral: n ? tot / (n * 4) * 100 : null, n, soma: tot }; }
 function posLevel(v){ return isNum(v) ? POS_LV.find(l => Math.round(v) >= l[0] && Math.round(v) <= l[1]) : null; }
 function posSet(k, v){ posState().a[k] = v === '' ? null : +v; save(); renderDiag(); }
-function posToPlan(){ const sc = posScore(); S.actions = S.actions || []; let n = 0;
-  sc.pil.forEach((p, i) => { if (!isNum(p.score) || p.score >= 60) return; const src = 'pos:' + i; if (S.actions.some(a => a.dsrc === src)) return;
-    S.actions.push({ custom:true, dsrc:src, what: posTxt(POS[i].r), why: `Posicionamento de marca: ${p.n} com ${Math.round(p.score)}%`, who:'', when: p.score < 40 ? '30 dias' : '60 dias', where:'Marketing e posicionamento', how:'', cost:'', prio: p.score < 40 ? 'Alta' : 'Média', status:'Não iniciado' }); n++; });
-  save(); toast(n ? `${n} ação(ões) incluída(s) no plano 5W2H.` : 'Nenhum pilar abaixo de 60% ou ações já incluídas.', 'good'); }
+
 function posBody(){ const P = posState(); const sc = posScore(); const lv = posLevel(sc.geral); const low = sc.pil.map((p,i) => [p,i]).filter(([p]) => isNum(p.score)).sort((a,b) => a[0].score - b[0].score).slice(0,3);
   return `<div class="grid"><div class="card c8"><h3>Diagnóstico de posicionamento de ${S.meta.segment === 'autonomo' ? 'profissional / marca pessoal' : 'clínica / marca'}</h3>
     <p class="muted">Escala de 0 a 4 · <b>0</b> inexistente · <b>1</b> inicial · <b>2</b> parcial · <b>3</b> estruturado · <b>4</b> consolidado. Pontue com base em evidências (documentos, canais, jornada, práticas da equipe e percepção dos pacientes), não só na opinião do proprietário.</p>
@@ -3678,8 +3672,7 @@ function posBody(){ const P = posState(); const sc = posScore(); const lv = posL
     <div class="grid g2" style="margin-top:12px"><div class="field c6"><label>Principais achados</label><textarea class="cin" rows="3" onchange="posState().find=this.value;save()">${esc(P.find)}</textarea></div><div class="field c6"><label>Prioridades recomendadas</label><textarea class="cin" rows="3" onchange="posState().prio=this.value;save()">${esc(P.prio)}</textarea></div></div></div>
     <div class="card c4 isf ${!lv?'':sc.geral>=80?'good':sc.geral>=60?'neu':sc.geral>=40?'warn':'bad'}"><div class="kl"><span class="sig">IPM</span>Índice de posicionamento da marca</div><div class="isfv">${isNum(sc.geral) ? Math.round(sc.geral) : '—'}<small>/100</small></div><div class="isfl">${lv ? lv[2] : 'Avaliação não iniciada'}</div><div class="bar"><i style="width:${isNum(sc.geral)?sc.geral:0}%"></i></div><div class="kd">${lv ? lv[3] : 'Responda às perguntas para gerar a leitura.'} ${sc.n} de 25 respondidas.</div>
       <div style="margin-top:12px">${sc.pil.map(p => `<div style="margin:6px 0"><div class="row" style="margin:0;justify-content:space-between"><small>${p.n}</small><b>${isNum(p.score)?Math.round(p.score)+'%':'—'}</b></div><div class="bar"><i style="width:${isNum(p.score)?p.score:0}%"></i></div></div>`).join('')}</div>
-      <h4 style="margin-top:14px">Recomendações</h4>${low.map(([p,i]) => `<div class="howto" style="margin:6px 0"><b>${p.n} (${Math.round(p.score)}%)</b><br>${esc(posTxt(POS[i].r))}</div>`).join('') || '<p class="muted">Aparecem conforme a avaliação é preenchida.</p>'}
-      <button class="btn sm" style="margin-top:8px" onclick="posToPlan()">Levar pilares abaixo de 60% ao plano 5W2H</button></div></div>`; }
+      <h4 style="margin-top:14px">Recomendações</h4>${low.map(([p,i]) => `<div class="howto" style="margin:6px 0"><b>${p.n} (${Math.round(p.score)}%)</b><br>${esc(posTxt(POS[i].r))}</div>`).join('') || '<p class="muted">Aparecem conforme a avaliação é preenchida.</p>'}</div></div>`; }
 
 /* =========================================================
    12 - Gestão interna ELOGA: clientes e contratos, entregáveis,
@@ -4039,7 +4032,7 @@ function E2(){ const e = E(); for (const k of ['dem','res','contr','parc','rit',
 /* ---------- Ligação com o cliente do Analytics ---------- */
 function withClient(id, fn){ if (!id || !DB.clients[id]) return null; const prev = S; S = upgradeClient(DB.clients[id]); resetCalc(); try { return fn(); } catch(e){ console.warn(e); return null; } finally { S = prev; resetCalc(); } }
 function eloOf(analyticsId){ return E().clients.find(c => c.link === analyticsId); }
-function cliDiag(c){ return withClient(c.link, () => { const acts = (S.actions||[]).filter(a => a.custom); return { idp: dGeral(), gaps: dGaps().length, acts: acts.length, done: acts.filter(a => a.status === 'Concluído').length, late: 0 }; }); }
+function cliDiag(c){ return withClient(c.link, () => { const ps = pdcaStats(); return { idp: dGeral(), gaps: dGaps().length, acts: ps.n, done: ps.done, late: ps.late }; }); }
 
 /* ---------- Métricas de projeto ---------- */
 function adesao(cid){ const t = todayIso(); const d = E2().dem.filter(x => x.cliente === cid && x.resp === 'Cliente' && x.status !== 'Cancelada' && x.prazo && x.prazo <= t);
@@ -4119,7 +4112,7 @@ function renderEMetas(){
       <td><div class="bar kr"><i style="width:${isNum(p)?Math.max(0,Math.min(100,p*100)):0}%;background:${!isNum(p)?'':p>=.7?'var(--good)':p>=.4?'var(--warn)':'var(--bad)'}"></i></div> ${fmtPct(p,0)}</td><td><button class="lnk" onclick="E2().okr[${oi}].krs.splice(${ki},1);save();show(PAGE)">excluir</button></td></tr>`; }).join('')}</tbody></table></div></div>`).join('') || `<div class="card">${notice('warn', `Nenhum objetivo para o ${qLabel(q)}. Use "+ Objetivo".`)}</div>`}
   <div class="card"><h3>Método ELOGA de acompanhamento</h3><div class="tscroll"><table class="tbl sm"><thead><tr><th>Ritual</th><th>Frequência</th><th>Duração</th><th>Pauta</th><th>Onde registrar</th></tr></thead><tbody>
     <tr><td><b>Check-in do projeto</b></td><td>Semanal</td><td>15 min</td><td>Demandas vencidas e da semana, bloqueios, próximos passos</td><td>Projetos › Demandas e Rituais</td></tr>
-    <tr><td><b>Reunião de resultados com o cliente</b></td><td>Mensal</td><td>60 min</td><td>Indicadores do mês × linha de base, farol, adesão, plano 5W2H</td><td>Relatório PDF do cliente + Rituais</td></tr>
+    <tr><td><b>Reunião de resultados com o cliente</b></td><td>Mensal</td><td>60 min</td><td>Indicadores do mês × linha de base, farol, adesão, plano PDCA</td><td>Relatório PDF do cliente + Rituais</td></tr>
     <tr><td><b>Revisão das metas da ELOGA</b></td><td>Mensal</td><td>30 min</td><td>Scorecard do trimestre, caixa, funil do site, NPS</td><td>Metas (esta aba)</td></tr>
     <tr><td><b>Revisão trimestral</b></td><td>Trimestral</td><td>2 h</td><td>Fechar OKR, definir o próximo trimestre, rever preço e carteira</td><td>Metas › novo trimestre</td></tr>
     <tr><td><b>Encerramento de projeto</b></td><td>No fim do contrato</td><td>60 min</td><td>Antes × depois, valor gerado e ROI, NPS e depoimento, termo de encerramento</td><td>Projetos + Contratos + Site e entradas</td></tr></tbody></table></div>
