@@ -158,6 +158,11 @@ main{padding:22px 28px 40px}
   main,.foot{margin-left:0}
   main{padding:14px 12px 30px}
 }
+.nav .ntop{display:flex;align-items:center;gap:10px;width:100%;text-align:left;white-space:normal;font-size:14px;font-weight:800;padding:12px 12px;border-radius:10px;margin:3px 0;color:var(--petro)}
+.nav .ntop i{font-style:normal;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;background:var(--petro);color:#fff;font-size:13px;flex:none}
+.nav .ng.elo .ntop i{background:var(--roxo)}
+.nav .ntop.active i{background:var(--lima);color:var(--petro)}
+.nav .ncli{margin:6px 6px 10px;padding:9px 12px;border-left:4px solid var(--lima);background:var(--bg);border-radius:8px}.nav .ncli small{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700}.nav .ncli b{font-size:13.5px;color:var(--petro)}
 </style>
 </head>
 <body>
@@ -1776,6 +1781,8 @@ let PAGE = 'exec';
 function show(p){
   PAGE = p; document.body.classList.remove('navopen');
   if (p.startsWith('e_') && MODE !== 'eloga') { MODE = 'eloga'; buildNav(); document.body.classList.add('mode-eloga'); $('modeBtn').textContent = '← Voltar aos clientes'; }
+  if (!p.startsWith('e_') && MODE === 'eloga') { MODE = 'cli'; document.body.classList.remove('mode-eloga'); $('modeBtn').textContent = 'Gestão ELOGA'; }
+  buildNav();
   document.querySelectorAll('.nav button').forEach(b => b.classList.toggle('active', b.dataset.p === p));
   document.querySelectorAll('.page').forEach(s => s.classList.toggle('active', s.id === 'pg_' + p));
   Object.keys(CH).forEach(k => { try { CH[k].destroy(); } catch(e){} delete CH[k]; });
@@ -3801,10 +3808,10 @@ function renderEHoras(){
   <div class="card"><div class="chead"><h3>Lançamentos</h3><button class="btn sm" onclick="eAdd('horas',{data:todayIso(),h:1})">+ Horas</button></div>${eTable('horas', rows)}</div>`;
 }
 function exportEloga(){ download(`ELOGA_gestao_interna_${todayIso()}.json`, JSON.stringify({ app:'ELOGA-GESTAO', version:APP_VERSION, exported:new Date().toISOString(), eloga: E() }, null, 1), 'application/json'); toast('Backup da gestão ELOGA gerado.'); }
-function setMode(m){ MODE = m; buildNav(); document.body.classList.toggle('mode-eloga', m === 'eloga'); $('modeBtn').textContent = m === 'eloga' ? '← Voltar aos clientes' : 'Gestão ELOGA'; show(m === 'eloga' ? 'e_painel' : 'exec'); }
+function setMode(m){ MODE = m; buildNav(); document.body.classList.toggle('mode-eloga', m === 'eloga'); $('modeBtn').textContent = m === 'eloga' ? '← Voltar aos clientes' : 'Gestão ELOGA'; show(m === 'eloga' ? 'e_painel' : 'clientes'); }
 const NAV_CLI = [
   ['1','Importação',[['importar','Importar arquivos'],['soon','Leitor de PDFs (autodiagnóstico, proposta, plano)'],['soon','Fluxo de caixa do cliente (planilha modelo)']]],
-  ['2','Preenchimento',[['clientes','Visão geral de clientes'],['empresa','Cadastro do cliente'],['dados','Preencher dados'],['cad','Cadastros']]],
+  ['2','Preenchimento',[['empresa','Cadastro do cliente'],['dados','Preencher dados'],['cad','Cadastros']]],
   ['3','Análise',[['exec','Visão executiva'],['agenda','Agenda e atendimentos'],['rent','Rentabilidade'],['ciclo','Ciclo de receita'],['fat','Faturamento e glosas'],['caixa','Caixa e recebimento'],['prod','Produção'],['rep','Repasse'],['fisc','Notas e impostos'],['ind','Indicadores']]],
   ['4','Diagnóstico',[['diag','Diagnóstico por pilares'],['mkt','Marketing e NPS'],['estr','Estratégias']]],
   ['5','Documentos',[['rel','Relatório'],['glos','Glossário']]]
@@ -3812,9 +3819,14 @@ const NAV_CLI = [
 const NAV_CLOSED = {};
 function navToggle(k){ NAV_CLOSED[k] = !NAV_CLOSED[k]; buildNav(); }
 function buildNav(){
-  const grp = MODE === 'eloga' ? [['G','Gestão ELOGA',EPAGES]] : NAV_CLI;
   const act = typeof PAGE !== 'undefined' ? PAGE : '';
-  $('nav').innerHTML = grp.map(([n,t,items]) => `<div class="ng ${MODE==='eloga'?'elo':''} ${NAV_CLOSED[t]?'closed':''}"><button class="ngh" onclick="navToggle('${t}')"><i>${n==='G'?'★':n}</i>${t}<b>▼</b></button><div class="ngi">${items.map(([k,l]) => k==='soon' ? `<div class="soon">${l}<em>em breve</em></div>` : `<button data-p="${k}" class="${k===act?'active':''}" onclick="show('${k}')">${l}</button>`).join('')}</div></div>`).join('') + (MODE==='eloga' ? '' : '<div class="ngsep"></div><div class="ng"><button class="ngh" onclick="setMode(\'eloga\')"><i>★</i>Gestão ELOGA</button></div>');
+  const top = (k, l, ic, cls) => `<div class="ng ${cls||''}"><button data-p="${k}" class="ntop ${k===act?'active':''}" onclick="${k==='eloga'?"setMode('eloga')":`show('${k}')`}"><i>${ic}</i>${l}</button></div>`;
+  const grpHtml = (n,t,items,elo) => `<div class="ng ${elo?'elo':''} ${NAV_CLOSED[t]?'closed':''}"><button class="ngh" onclick="navToggle('${t}')"><i>${n}</i>${t}<b>▼</b></button><div class="ngi">${items.map(([k,l]) => k==='soon' ? `<div class="soon">${l}<em>em breve</em></div>` : `<button data-p="${k}" class="${k===act?'active':''}" onclick="show('${k}')">${l}</button>`).join('')}</div></div>`;
+  let html;
+  if (MODE === 'eloga') html = top('clientes','Gestão de clientes','◧') + '<div class="ngsep"></div>' + grpHtml('★','Gestão ELOGA',EPAGES,true);
+  else if (act === 'clientes') html = top('clientes','Gestão de clientes','◧') + top('eloga','Gestão ELOGA','★','elo');
+  else html = top('clientes','← Gestão de clientes','◧') + `<div class="ncli"><small>Cliente aberto</small><b>${esc((S&&S.meta&&(S.meta.tradeName||S.meta.company))||'Sem nome')}</b></div>` + NAV_CLI.map(([n,t,items]) => grpHtml(n,t,items)).join('') + '<div class="ngsep"></div>' + top('eloga','Gestão ELOGA','★','elo');
+  $('nav').innerHTML = html;
 }
 function navMeasure(){ const t = document.querySelector('header.top'); if (t) document.documentElement.style.setProperty('--hh', t.offsetHeight + 'px'); }
 document.addEventListener('click', e => { if (document.body.classList.contains('navopen') && !e.target.closest('.nav') && !e.target.closest('.navbtn')) document.body.classList.remove('navopen'); });
