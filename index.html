@@ -1767,7 +1767,7 @@ function chartImage(cfg, w=1400, h=620){
    05 - Interface: navegação, páginas e componentes
    ========================================================= */
 const PAGES = [
-  ['exec','Visão executiva'],['empresa','Empresa'],['cad','Cadastros'],['agenda','Agenda e atendimentos'],['fat','Faturamento e glosas'],['rep','Repasse'],['fisc','Notas e impostos'],['diag','Diagnóstico por pilares'],['mkt','Marketing e NPS'],['dados','Preencher dados'],['importar','Importar arquivos'],
+  ['clientes','Visão geral de clientes'],['exec','Visão executiva'],['empresa','Cadastro do cliente'],['cad','Cadastros'],['agenda','Agenda e atendimentos'],['fat','Faturamento e glosas'],['rep','Repasse'],['fisc','Notas e impostos'],['diag','Diagnóstico por pilares'],['mkt','Marketing e NPS'],['dados','Preencher dados'],['importar','Importar arquivos'],
   ['rent','Rentabilidade'],['ciclo','Ciclo de receita'],['caixa','Caixa e recebimento'],['prod','Produção'],
   ['ind','Indicadores'],['estr','Estratégias'],['rel','Relatório'],['glos','Glossário']
 ];
@@ -1879,7 +1879,8 @@ function renderEmpresa(){
   const m = S.meta; const st = DB.settings;
   const f = (k, l, ph='', type='text', span='c4', d='') => `<div class="field ${span}"><label>${l}</label><input id="m_${k}" type="${type}" value="${esc(m[k])}" placeholder="${esc(ph)}" oninput="setMeta('${k}',this.value)">${d?`<small>${d}</small>`:''}</div>`;
   const clients = Object.values(DB.clients).sort((a,b)=>(a.meta.tradeName||a.meta.company||'').localeCompare(b.meta.tradeName||b.meta.company||''));
-  $('pg_empresa').innerHTML = head('Empresa analisada','Identificação do cliente, período de análise e configurações do relatório.') + `
+  $('pg_empresa').innerHTML = head('Cadastro do cliente','Identificação, período de análise e configurações do relatório deste cliente.') + `
+  <div class="row" style="margin:0 0 12px"><button class="btn ghost sm" onclick="show('clientes')">← Visão geral de clientes</button></div>
   <div class="grid">
     <div class="card c8"><h3>Identificação do cliente</h3><div class="grid g2">
       ${f('company','Razão social','Clínica Exemplo Ltda.','text','c6')}${f('tradeName','Nome fantasia','Clínica Exemplo','text','c6')}
@@ -1898,12 +1899,25 @@ function renderEmpresa(){
       <div class="logobox">${m.clientLogo ? `<img src="${m.clientLogo}" alt="Logo do cliente">` : '<span class="muted">Aparece na capa do relatório, ao lado da marca ELOGA.</span>'}</div>
       <div class="row"><button class="btn sm" onclick="pickImage('client')">Selecionar imagem</button>${m.clientLogo?'<button class="btn sm ghost" onclick="S.meta.clientLogo=\'\';save();renderEmpresa()">Remover</button>':''}</div>
     </div>
-    <div class="card c12"><h3>Clientes neste navegador</h3>
-      <table class="tbl"><thead><tr><th>Cliente</th><th>Segmento</th><th>Período</th><th>Última alteração</th><th></th></tr></thead><tbody>
-      ${clients.map(c => `<tr class="${c.id===S.id?'cur':''}"><td><b>${esc(c.meta.tradeName||c.meta.company||'Sem nome')}</b><br><small>${esc(c.meta.cnpj||'')}</small></td><td>${({terapia:'Terapia',estetica:'Estética',mista:'Mista',autonomo:'Autônomo'})[c.meta.segment]||''}</td><td>até ${c.meta.endMonth?monthLabel(c.meta.endMonth):'—'}</td><td>${new Date(c.updated).toLocaleString('pt-BR')}</td><td class="acts">${c.id===S.id?'<span class="chip ok">Aberto</span>':`<button class="btn sm" onclick="openClient('${c.id}')">Abrir</button>`}<button class="btn sm ghost" onclick="exportClient('${c.id}')">Backup</button><button class="btn sm danger" onclick="deleteClient('${c.id}')">Excluir</button></td></tr>`).join('')}
-      </tbody></table>
-      <div class="row"><button class="btn" onclick="newClient()">+ Novo cliente</button><button class="btn ghost" onclick="restoreBackup()">Restaurar backup (.json)</button><button class="btn ghost" onclick="exportAll()">Backup de todos os clientes</button></div>
-      ${notice('', '<b>Onde ficam os dados:</b> somente neste navegador, neste computador. Nada é enviado para servidor. Limpar o histórico/cache do navegador apaga os dados: faça <b>backup</b> ao fim de cada sessão com o cliente.')}
+  </div>`;
+}
+
+const SEGS = { terapia:'Terapia', estetica:'Estética', mista:'Mista', autonomo:'Autônomo' };
+const clientBlank = c => !(c.meta && (c.meta.company || c.meta.tradeName)) && !(c.agenda||[]).length && !Object.keys(c.monthly||{}).length;
+function renderClientes(){
+  const list = Object.values(DB.clients).filter(c => !clientBlank(c) || c.id === DB.pendingNew).sort((a,b)=>(a.meta.tradeName||a.meta.company||'').localeCompare(b.meta.tradeName||b.meta.company||''));
+  const bySeg = {}; list.forEach(c => { const k = SEGS[c.meta.segment] || 'Sem segmento'; bySeg[k] = (bySeg[k]||0) + 1; });
+  const nm = c => esc(c.meta.tradeName||c.meta.company||'Sem nome');
+  $('pg_clientes').innerHTML = head('Visão geral de clientes','Todos os clientes cadastrados. Abra um cliente para trabalhar nele ou cadastre um novo.') + `
+  <div class="grid">
+    <div class="card c4"><h3>Clientes cadastrados</h3><div class="kv" style="font-size:38px;font-weight:800;color:var(--petro)">${list.length}</div></div>
+    <div class="card c8"><h3>Por segmento</h3><div class="row">${Object.keys(bySeg).length ? Object.entries(bySeg).map(([k,v]) => `<span class="chip ok">${k}: <b>${v}</b></span>`).join(' ') : '<span class="muted">Nenhum cliente ainda.</span>'}</div></div>
+    <div class="card c12"><h3>Clientes</h3>
+      ${list.length ? `<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Cliente</th><th>Segmento</th><th>Cidade/UF</th><th>Responsável</th><th>Período</th><th>Última alteração</th><th></th></tr></thead><tbody>
+      ${list.map(c => `<tr class="${c.id===S.id?'cur':''}"><td><b>${nm(c)}</b><br><small>${esc(c.meta.cnpj||'')}</small></td><td>${SEGS[c.meta.segment]||''}</td><td>${esc(c.meta.city||'')}</td><td>${esc(c.meta.responsible||'')}</td><td>até ${c.meta.endMonth?monthLabel(c.meta.endMonth):'—'}</td><td>${c.updated?new Date(c.updated).toLocaleString('pt-BR'):''}</td><td class="acts"><button class="btn sm" onclick="openClient('${c.id}')">Abrir</button><button class="btn sm ghost" onclick="openClient('${c.id}');show('empresa')">Cadastro</button><button class="btn sm ghost" onclick="exportClient('${c.id}')">Backup</button><button class="btn sm danger" onclick="deleteClient('${c.id}')">Excluir</button></td></tr>`).join('')}
+      </tbody></table></div>` : '<p class="muted">Nenhum cliente cadastrado ainda. Use <b>+ Novo cliente</b> ou restaure um backup.</p>'}
+      <div class="row" style="margin-top:12px"><button class="btn" onclick="newClient()">+ Novo cliente</button><button class="btn ghost" onclick="restoreBackup()">Restaurar backup (.json)</button><button class="btn ghost" onclick="exportAll()">Backup de todos os clientes</button></div>
+      ${notice('', '<b>Onde ficam os dados:</b> na nuvem protegida da ELOGA (login + autenticador). Mesmo assim, baixe um <b>backup</b> de vez em quando.')}
     </div>
   </div>`;
 }
@@ -2122,7 +2136,7 @@ function renderGlos(){
   ${notice('warn','<b>Referências externas não são metas automáticas.</b> Parâmetros hospitalares e internacionais indicam o que monitorar. A meta de cada cliente parte da própria linha de base (3 a 6 meses) e de uma melhoria realista.')}</div>`;
 }
 
-const RENDER = { mkt:()=>renderMkt(), diag:()=>renderDiag(), fisc:()=>renderFisc(), e_fisc:()=>renderEFisc(), e_proj:()=>renderEProj(), e_metas:()=>renderEMetas(), e_contr:()=>renderEContr(), e_parc:()=>renderEParc(), e_entr:()=>renderEEntr(), e_painel:()=>renderEPainel(), e_cli:()=>renderECli(), e_ent:()=>renderEEnt(), e_ag:()=>renderEAg(), e_fin:()=>renderEFin(), e_horas:()=>renderEHoras(), cad:()=>renderCad(), agenda:()=>renderAgenda(), fat:()=>renderFat(), rep:()=>renderRep(), exec:renderExec, empresa:renderEmpresa, dados:renderDados, importar:()=>renderImport(), rent:renderRent, ciclo:renderCiclo, caixa:renderCaixa, prod:renderProd, ind:renderInd, estr:renderEstr, rel:renderRel, glos:renderGlos };
+const RENDER = { mkt:()=>renderMkt(), diag:()=>renderDiag(), fisc:()=>renderFisc(), e_fisc:()=>renderEFisc(), e_proj:()=>renderEProj(), e_metas:()=>renderEMetas(), e_contr:()=>renderEContr(), e_parc:()=>renderEParc(), e_entr:()=>renderEEntr(), e_painel:()=>renderEPainel(), e_cli:()=>renderECli(), e_ent:()=>renderEEnt(), e_ag:()=>renderEAg(), e_fin:()=>renderEFin(), e_horas:()=>renderEHoras(), cad:()=>renderCad(), agenda:()=>renderAgenda(), fat:()=>renderFat(), rep:()=>renderRep(), exec:renderExec, empresa:renderEmpresa, clientes:renderClientes, dados:renderDados, importar:()=>renderImport(), rent:renderRent, ciclo:renderCiclo, caixa:renderCaixa, prod:renderProd, ind:renderInd, estr:renderEstr, rel:renderRel, glos:renderGlos };
 
 /* ---------- Clientes ---------- */
 function refreshClientSelect(){
@@ -2130,10 +2144,10 @@ function refreshClientSelect(){
   sel.innerHTML = Object.values(DB.clients).map(c => `<option value="${c.id}" ${c.id===S.id?'selected':''}>${esc(c.meta.tradeName||c.meta.company||'Cliente sem nome')}</option>`).join('');
 }
 function openClient(id){ if (!DB.clients[id]) return; DB.current = id; S = upgradeClient(DB.clients[id]); resetCalc(); save(true); refreshClientSelect(); show(PAGE === 'empresa' ? 'empresa' : 'exec'); }
-function newClient(){ const c = blankClient(); DB.clients[c.id] = c; openClient(c.id); show('empresa'); toast('Novo cliente criado. Preencha a identificação.'); }
+function newClient(){ const c = blankClient(); DB.clients[c.id] = c; DB.pendingNew = c.id; openClient(c.id); show('empresa'); toast('Novo cliente criado. Preencha a identificação.'); }
 function deleteClient(id){ const c = DB.clients[id]; if (!c) return; if (!confirm(`Excluir definitivamente "${c.meta.tradeName||c.meta.company||'Cliente sem nome'}" deste navegador? Faça backup antes, se precisar.`)) return;
   delete DB.clients[id]; if (DB.current === id) { const ids = Object.keys(DB.clients); if (ids.length) DB.current = ids[0]; else { const n = blankClient(); DB.clients[n.id] = n; DB.current = n.id; } S = upgradeClient(DB.clients[DB.current]); resetCalc(); }
-  save(true); refreshClientSelect(); renderEmpresa(); }
+  save(true); refreshClientSelect(); show('clientes'); }
 function download(name, content, type){ const b = new Blob([content], { type }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500); }
 const slug = s => norm(s||'cliente').replace(/\s+/g,'_').slice(0,40) || 'cliente';
 function exportClient(id){ const c = DB.clients[id||S.id]; download(`ELOGA_backup_${slug(c.meta.tradeName||c.meta.company)}_${new Date().toISOString().slice(0,10)}.json`, JSON.stringify({ app:'ELOGA-PF', version:APP_VERSION, exported:new Date().toISOString(), clients:[c] }, null, 1), 'application/json'); toast('Backup gerado.'); }
@@ -2145,7 +2159,7 @@ function restoreBackup(){
       if (d.eloga && (!Object.values(E()).some(v => Array.isArray(v) && v.length) || confirm('O backup contém dados da gestão interna ELOGA. Substituir os dados atuais da gestão ELOGA?'))) { DB.eloga = d.eloga; if (d.app === 'ELOGA-GESTAO') { save(true); toast('Gestão ELOGA restaurada.', 'good'); return show(PAGE); } }
       const list = d.clients || (d.meta ? [d] : null); if (!list || !list.length) throw new Error('arquivo sem clientes');
       let n = 0; list.forEach(c => { if (!c.meta) return; c.id = c.id || uid(); if (DB.clients[c.id] && !confirm(`"${c.meta.tradeName||c.meta.company}" já existe neste navegador. Substituir pela versão do backup?`)) return; DB.clients[c.id] = upgradeClient(c); n++; });
-      save(true); if (n) openClient(list[list.length-1].id); applyBrand(); toast(`${n} cliente(s) restaurado(s).`); if (PAGE==='empresa') renderEmpresa();
+      save(true); if (n && PAGE !== 'clientes') openClient(list[list.length-1].id); applyBrand(); toast(`${n} cliente(s) restaurado(s).`); if (PAGE==='clientes') renderClientes(); else if (PAGE==='empresa') renderEmpresa();
     } catch(x){ toast('Não foi possível ler o backup: ' + x.message, 'bad'); } };
     r.readAsText(f); };
   inp.click();
@@ -2698,7 +2712,7 @@ async function init(){
   $('clientSel').onchange = e => openClient(e.target.value);
   setSaveBadge(storageOK);
   const c = completeness();
-  show(c.monthsWithData === 0 && !S.meta.company && !S.meta.tradeName ? 'empresa' : 'exec');
+  show('clientes');
   if (!storageOK) toast('Este navegador bloqueou o armazenamento local. Use Backup para não perder dados.', 'bad');
   $('ver').textContent = 'v' + APP_VERSION;
   if (Cloud.empty) toast('A nuvem ainda está vazia. Use "Restaurar" para enviar o backup (.json) dos seus clientes.', 'good');
@@ -3790,7 +3804,7 @@ function exportEloga(){ download(`ELOGA_gestao_interna_${todayIso()}.json`, JSON
 function setMode(m){ MODE = m; buildNav(); document.body.classList.toggle('mode-eloga', m === 'eloga'); $('modeBtn').textContent = m === 'eloga' ? '← Voltar aos clientes' : 'Gestão ELOGA'; show(m === 'eloga' ? 'e_painel' : 'exec'); }
 const NAV_CLI = [
   ['1','Importação',[['importar','Importar arquivos'],['soon','Leitor de PDFs (autodiagnóstico, proposta, plano)'],['soon','Fluxo de caixa do cliente (planilha modelo)']]],
-  ['2','Preenchimento',[['dados','Preencher dados'],['empresa','Empresa'],['cad','Cadastros']]],
+  ['2','Preenchimento',[['clientes','Visão geral de clientes'],['empresa','Cadastro do cliente'],['dados','Preencher dados'],['cad','Cadastros']]],
   ['3','Análise',[['exec','Visão executiva'],['agenda','Agenda e atendimentos'],['rent','Rentabilidade'],['ciclo','Ciclo de receita'],['fat','Faturamento e glosas'],['caixa','Caixa e recebimento'],['prod','Produção'],['rep','Repasse'],['fisc','Notas e impostos'],['ind','Indicadores']]],
   ['4','Diagnóstico',[['diag','Diagnóstico por pilares'],['mkt','Marketing e NPS'],['estr','Estratégias']]],
   ['5','Documentos',[['rel','Relatório'],['glos','Glossário']]]
