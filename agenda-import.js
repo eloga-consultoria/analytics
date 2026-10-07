@@ -88,7 +88,7 @@
   }
 
   function commitAgenda() {
-    const [a, b] = SIMP.range; const stmap = SIMP.stmap, cut = SIMP.cut, out = SIMP.out;
+    const [a, b] = SIMP.range; const stmap = SIMP.stmap, cut = SIMP.cut, out = SIMP.out; const impId = uid(); out.forEach(r => r.s = impId);
     S.agenda = S.agenda.filter(r => r.d < a || r.d > b).concat(out).sort((x, y) => x.d < y.d ? -1 : x.d > y.d ? 1 : (x.h < y.h ? -1 : 1));
     syncPayers(out.map(r => r.payer)); _cut = null; syncProfs();
     [...new Set(out.map(r => r.u).filter(Boolean))].forEach(n => AgUn.add(n));
@@ -96,7 +96,7 @@
     out.forEach(r => { const chosen = stmap[keyOf(r, cut)]; if (chosen) S.cad.statusMap[stKey(r)] = chosen; });
     new Set(S.agenda.map(stKey)).forEach(k => { if (!(k in S.cad.statusMap)) S.cad.statusMap[k] = defaultKind(k); });
     S.cad.statusOK = true;
-    logImport('agenda', out.length, `Período ${toDate(a).toLocaleDateString('pt-BR')}–${toDate(b).toLocaleDateString('pt-BR')} · status classificados`);
+    logImport('agenda', out.length, `Período ${toDate(a).toLocaleDateString('pt-BR')}–${toDate(b).toLocaleDateString('pt-BR')} · status classificados`, impId);
     resetAll(); toast(`${out.length.toLocaleString('pt-BR')} agendamentos importados e status classificados.`, 'good'); SIMP = null; show('agenda');
   }
 

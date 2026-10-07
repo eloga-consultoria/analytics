@@ -61,7 +61,7 @@ main{max-width:1480px;margin:auto;padding:20px 22px 40px}.page{display:none}.pag
 .notice{padding:11px 14px;border-radius:10px;background:#EAF7F7;border:1px solid #BFE3E4;border-left:4px solid var(--teal);font-size:12.3px;margin:10px 0}.notice.warn{background:#FFF8E6;border-color:#F3DC95;border-left-color:var(--warn)}.notice.good{background:#EAF8F1;border-color:#BDE9D4;border-left-color:var(--good)}.notice.bad{background:#FDEDEE;border-color:#F6CBCD;border-left-color:var(--bad)}.notice b{color:var(--petro)}
 /* tabelas */
 .tscroll{overflow:auto;max-width:100%;border-radius:10px}
-.tbl{border-collapse:collapse;width:100%;font-size:12px}.tbl th{background:var(--petro);color:#fff;text-align:left;padding:8px 9px;font-size:11px;font-weight:700;white-space:nowrap;position:sticky;top:0}.tbl td{padding:8px 9px;border-bottom:1px solid #E7EDEF;vertical-align:top}.tbl tr:nth-child(even) td{background:#FAFCFC}.tbl .num{text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}.tbl th{text-align:center}.tbl th:first-child{text-align:left}.tbl .neg{color:var(--bad)}.tbl .pos{color:var(--good);font-weight:800}.tbl tr.b td{font-weight:800;background:#EEF5F6!important}.tbl tr.hl td{background:#E4F1F3!important;color:var(--petro)}.tbl tr.grp td{background:#E8EFF1!important;font-weight:800;color:var(--petro);text-transform:uppercase;font-size:10.5px;letter-spacing:.5px}.tbl tr.cur td{background:#F4EEFF!important}.tbl td.acts{white-space:nowrap}.tbl td.acts .btn{margin-left:4px}.tbl.sm td,.tbl.sm th{padding:5px 7px;font-size:11px}.tbl small{color:var(--muted)}
+.tbl{border-collapse:collapse;width:100%;font-size:12px}.tbl th{background:var(--petro);color:#fff;text-align:left;padding:8px 9px;font-size:11px;font-weight:700;white-space:nowrap;position:sticky;top:0}.tbl td{padding:8px 9px;border-bottom:1px solid #E7EDEF;vertical-align:top}.tbl tr:nth-child(even) td{background:#FAFCFC}.tbl td.dl{cursor:pointer;color:var(--roxo);font-weight:700;text-decoration:underline dotted}.tbl .num{text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}.tbl th{text-align:center}.tbl th:first-child{text-align:left}.tbl .neg{color:var(--bad)}.tbl .pos{color:var(--good);font-weight:800}.tbl tr.b td{font-weight:800;background:#EEF5F6!important}.tbl tr.hl td{background:#E4F1F3!important;color:var(--petro)}.tbl tr.grp td{background:#E8EFF1!important;font-weight:800;color:var(--petro);text-transform:uppercase;font-size:10.5px;letter-spacing:.5px}.tbl tr.cur td{background:#F4EEFF!important}.tbl td.acts{white-space:nowrap}.tbl td.acts .btn{margin-left:4px}.tbl.sm td,.tbl.sm th{padding:5px 7px;font-size:11px}.tbl small{color:var(--muted)}
 .indt td.leg{min-width:230px;max-width:320px;font-size:11.3px;color:var(--muted)}.indt input.tgt{width:74px;border:1px solid var(--line);border-radius:6px;padding:5px;text-align:right;font-family:inherit}
 /* grade de dados */
 .lvtabs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px}.lvtabs button{text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;cursor:pointer;font-family:inherit;display:flex;flex-direction:column;gap:2px}.lvtabs button b{color:var(--petro);font-size:13.5px}.lvtabs button small{color:var(--muted)}.lvtabs button.active{border-color:var(--roxo);box-shadow:0 0 0 3px #6A00FF1F;background:#FCFAFF}
@@ -672,7 +672,7 @@ const PDFW_B64='LyoqCiAqIEBsaWNzdGFydCBUaGUgZm9sbG93aW5nIGlzIHRoZSBlbnRpcmUgbGlj
    01 - Núcleo: campos, estado, armazenamento e utilitários
    ========================================================= */
 'use strict';
-const APP_VERSION = '3.0.0-beta.6';
+const APP_VERSION = '3.0.0-beta.7';
 const STORE_KEY = 'eloga_painel_financeiro_v1';
 const $ = id => document.getElementById(id);
 
@@ -2233,7 +2233,7 @@ function renderImport(){
   ${notice('', '<b>Não precisa usar o modelo.</b> Planilhas exportadas de outros sistemas também funcionam: basta indicar qual coluna corresponde a cada informação.')}
   ${notice('warn', '<b>LGPD:</b> não importe nome ou CPF de pacientes. Colunas não mapeadas são descartadas e nada sai deste computador.')}</div>
   <div id="impWork" class="c12"></div>
-  <div class="card c12"><h3>Histórico de importações</h3>${S.imports.length ? `<table class="tbl"><thead><tr><th>Data</th><th>Tipo</th><th>Arquivo / aba</th><th>Registros</th><th>Observação</th></tr></thead><tbody>${S.imports.slice(0,20).map(i => `<tr><td>${new Date(i.date).toLocaleString('pt-BR')}</td><td>${esc(ITYPES[i.type]?.n||i.type)}</td><td>${esc(i.file||'')} ${i.sheet?'· '+esc(i.sheet):''}</td><td class="num">${i.count}</td><td>${esc(i.note||'')}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma importação realizada.</p>'}</div></div>`;
+  ${ImpMgr.table()}</div>`;
 }
 function clearDetail(k){ if (!confirm('Apagar todos os registros importados deste tipo?')) return; S.detail[k] = []; resetCalc(); save(); renderImport(); }
 function startImport(type){
@@ -2363,9 +2363,10 @@ function commitImport(mode){
   } else {
     const key = IMP.type;
     if (mode === 'replace') S.detail[key] = [];
+    IMP.recs.forEach(x => x.s = IMP.impId = IMP.impId || uid());
     S.detail[key].push(...IMP.recs); count = IMP.recs.length;
   }
-  S.imports.unshift({ date:new Date().toISOString(), type:IMP.type, file:IMP.file, sheet:IMP.sheet, count, note: (mode==='fill'?'Preencheu só vazios':mode==='replace'?'Substituição':'Adição') + (IMP.note?' · '+IMP.note:'') });
+  S.imports.unshift({ id:IMP.impId || uid(), date:new Date().toISOString(), type:IMP.type, file:IMP.file, sheet:IMP.sheet, count, note: (mode==='fill'?'Preencheu só vazios':mode==='replace'?'Substituição':'Adição') + (IMP.note?' · '+IMP.note:'') });
   resetCalc(); save(true); toast(`Importação concluída: ${count} ${IMP.type==='mensal'?'valor(es)':'registro(s)'}.`, 'good'); IMP = null; renderImport();
 }
 function commitLanc(mode){
@@ -2980,10 +2981,11 @@ function previewTable(){
     <div class="row end">${cancelBtn()}<button class="btn" onclick="commitTable('merge')">Atualizar e incluir</button><button class="btn pdf" onclick="commitTable('replace')">Substituir a tabela</button></div></div>`;
 }
 function commitTable(mode){
+  const impId = uid(); SIMP.out.forEach(t => t.s = impId);
   if (mode === 'replace') S.cad.table = [];
   const key = t => norm(t.payer) + '|' + (t.code || norm(t.desc)); const idx = Object.fromEntries(S.cad.table.map((t,i) => [key(t), i]));
   SIMP.out.forEach(t => { const k = key(t); if (k in idx) Object.assign(S.cad.table[idx[k]], t); else { S.cad.table.push(t); idx[k] = S.cad.table.length - 1; } });
-  syncPayers(SIMP.out.map(t => t.payer)); logImport('tabela', SIMP.out.length, mode === 'replace' ? 'Tabela substituída' : 'Tabela atualizada');
+  syncPayers(SIMP.out.map(t => t.payer)); logImport('tabela', SIMP.out.length, mode === 'replace' ? 'Tabela substituída' : 'Tabela atualizada', impId);
   _pidx = null; resetAll(); toast(`${SIMP.out.length} preço(s) gravados.`, 'good'); SIMP = null; CADTAB = 'tabela'; show('cad');
 }
 function previewAgenda(){
@@ -3018,7 +3020,7 @@ function syncProfs(){
   Object.entries(esp).forEach(([name, e]) => { const top = Object.entries(e).sort((a,b)=>b[1]-a[1])[0][0];
     if (!have[name]) { const p = { name, esp: top, cbo:'', reg:'', slot: toNum(S.cad.clinic.slot) || 30, grade:{}, active:true, rep:{} }; suggestGrade(p); S.cad.profs.push(p); } else if (!have[name].esp) have[name].esp = top; });
 }
-function logImport(type, count, note){ S.imports.unshift({ date:new Date().toISOString(), type, file: SIMP && SIMP.file, count, note }); }
+function logImport(type, count, note, id){ id = id || uid(); S.imports.unshift({ id, date:new Date().toISOString(), type, file: SIMP && SIMP.file, count, note }); return id; }
 function resetAll(){ _pidx = null; _cut = null; if (typeof agReset === 'function') agReset(); if (typeof rcmReset === 'function') rcmReset(); resetCalc(); save(true); }
 
 /* ---------- Motor da agenda ---------- */
@@ -3086,7 +3088,7 @@ function agendaMonthly(){
 function monthTable(ms, rows, opts={}){
   return `<div class="tscroll"><table class="tbl mt"><thead><tr><th>${opts.first||'Indicador'}</th>${ms.map(m => `<th>${monthLabel(m)}</th>`).join('')}${opts.noTotal?'':`<th>${opts.totLabel||'Total'}</th>`}</tr></thead><tbody>
   ${rows.map(r => { const vals = ms.map(m => r.f(m)); const tot = r.tot ? r.tot(vals) : (r.agg === 'avg' ? avg(vals) : r.agg === 'none' ? null : vals.filter(isNum).reduce((a,b)=>a+b,0)); const fm = r.fmt || (v => fmtNum(v));
-    return `<tr class="${r.cls||''}"><td>${r.dot?`<i class="dot" style="background:${r.dot}"></i>`:''}${esc(r.l)}</td>${vals.map(v => `<td class="num">${isNum(v)?fm(v):'—'}</td>`).join('')}${opts.noTotal?'':`<td class="num b">${isNum(tot)?fm(tot):'—'}</td>`}</tr>`; }).join('')}
+    return `<tr class="${r.cls||''}"><td>${r.dot?`<i class="dot" style="background:${r.dot}"></i>`:''}${esc(r.l)}</td>${vals.map((v,i) => r.drill && isNum(v) && v > 0 ? `<td class="num dl" title="Clique para ver a lista" onclick="AgImp.drill('${r.drill}','${ms[i]}')">${fm(v)}</td>` : `<td class="num">${isNum(v)?fm(v):'—'}</td>`).join('')}${opts.noTotal?'':`<td class="num b">${isNum(tot)?fm(tot):'—'}</td>`}</tr>`; }).join('')}
   </tbody></table></div>`;
 }
 
@@ -3235,14 +3237,14 @@ function renderAgenda(){
     ${k('Rec/pac','Receita por paciente', fmtMoney(A.recPac), 'Receita estimada ÷ pacientes atendidos no período.', 'neu')}
   </div>
   <div class="card"><div class="chead"><h3>Resultado dos agendamentos por mês</h3></div><div class="cwrap"><canvas id="ch_agm"></canvas></div>
-    ${monthTable(ms, kinds.map(kk => ({ l:KSHORT[kk], dot:KCOL[kk], f:m => A.M[m][kk] })).concat([{ l:'Agendamentos do período (sem futuros e reagendados)', cls:'b', f:m => pastN(A.M[m]) }, { l:'Taxa de comparecimento', f:m => div(A.M[m].realizado, pastN(A.M[m])), fmt: v => fmtPct(v), tot: () => A.comp }, { l:'Absenteísmo', f:m => div(A.M[m].falta + A.M[m].falta_cob, A.M[m].realizado + A.M[m].falta + A.M[m].falta_cob), fmt: v => fmtPct(v), tot: () => A.abs }]), { first:'Resultado' })}
+    ${monthTable(ms, kinds.map(kk => ({ l:KSHORT[kk], dot:KCOL[kk], drill:'k:'+kk, f:m => A.M[m][kk] })).concat([{ l:'Agendamentos do período (sem futuros e reagendados)', cls:'b', f:m => pastN(A.M[m]) }, { l:'Taxa de comparecimento', f:m => div(A.M[m].realizado, pastN(A.M[m])), fmt: v => fmtPct(v), tot: () => A.comp }, { l:'Absenteísmo', f:m => div(A.M[m].falta + A.M[m].falta_cob, A.M[m].realizado + A.M[m].falta + A.M[m].falta_cob), fmt: v => fmtPct(v), tot: () => A.abs }]), { first:'Resultado' })}
     <div class="howto"><b>Como ler:</b> ${AG_NOTES.month}</div></div>
   <div class="card"><div class="chead"><h3>Ocupação e preenchimento da agenda</h3></div><div class="cwrap"><canvas id="ch_ago"></canvas></div>
     ${monthTable(ms, [{ l:'Capacidade da grade dos profissionais', f:m => A.M[m].cap }, { l:'Capacidade das salas (horário × salas)', f:m => A.M[m].capRoom }, { l:'Agendamentos (inclui futuros)', f:m => pastN(A.M[m]) + A.M[m].agendado }, { l:'Realizados', f:m => A.M[m].realizado }, { l:'Faltas', f:m => A.M[m].falta + A.M[m].falta_cob },
       { l:'Ocupação da grade', cls:'b', f:m => div(A.M[m].realizado, A.M[m].cap), fmt: v => fmtPct(v), tot: () => A.ocup }, { l:'Preenchimento da grade', f:m => div(pastN(A.M[m]) + A.M[m].agendado, A.M[m].cap), fmt: v => fmtPct(v), tot: () => A.preench }, { l:'Ocupação das salas', f:m => div(A.M[m].realizado, A.M[m].capRoom), fmt: v => fmtPct(v), tot: () => A.ocupRoom }])}
     <div class="howto"><b>Como ler:</b> ${AG_NOTES.ocup}</div></div>
   <div class="card"><div class="chead"><h3>Pacientes por mês: ativos, novos, retornos e evadidos</h3></div><div class="cwrap"><canvas id="ch_agp"></canvas></div>
-    ${monthTable(ms, [{ l:'Ativos (atendidos no mês)', dot:PAL.petro, f:m => P[m].ativos, agg:'none' }, { l:'Novos', dot:PAL.good, f:m => P[m].novos }, { l:'Retornos', dot:PAL.teal, f:m => P[m].ret }, { l:'Evadidos', dot:PAL.bad, f:m => P[m].evad }, { l:'Saldo (novos + retornos − evadidos)', cls:'b', f:m => P[m].novos + P[m].ret - P[m].evad }, { l:'Taxa de evasão (evadidos ÷ ativos do mês anterior)', f:m => { const pv = A.P[addMonths(m,-1)]; return pv ? div(P[m].evad, pv.ativos) : null; }, fmt: v => fmtPct(v), agg:'avg' }], { totLabel:'Soma / média' })}
+    ${monthTable(ms, [{ l:'Ativos (atendidos no mês)', dot:PAL.petro, drill:'ativos', f:m => P[m].ativos, agg:'none' }, { l:'Novos', dot:PAL.good, drill:'novos', f:m => P[m].novos }, { l:'Retornos', dot:PAL.teal, drill:'ret', f:m => P[m].ret }, { l:'Evadidos', dot:PAL.bad, drill:'evad', f:m => P[m].evad }, { l:'Saldo (novos + retornos − evadidos)', cls:'b', f:m => P[m].novos + P[m].ret - P[m].evad }, { l:'Taxa de evasão (evadidos ÷ ativos do mês anterior)', f:m => { const pv = A.P[addMonths(m,-1)]; return pv ? div(P[m].evad, pv.ativos) : null; }, fmt: v => fmtPct(v), agg:'avg' }], { totLabel:'Soma / média' })}
     <div class="howto"><b>Como ler:</b> ${AG_NOTES.pac} O último mês do arquivo não tem evadidos enquanto não existir o mês seguinte para comparar.</div></div>
   <div class="card"><div class="chead"><h3>Receita estimada por mês</h3></div><div class="cwrap sm"><canvas id="ch_agr"></canvas></div>
     ${monthTable(ms, [{ l:'Atendimentos cobráveis (realizados + faltas cobradas)', f:m => A.M[m].eleg }, { l:'Receita estimada', cls:'b', f:m => A.M[m].receita, fmt: fmtMoney }, { l:'Pacientes atendidos', f:m => A.M[m].pac.size, agg:'none', tot: () => A.pacientes }, { l:'Receita por paciente', f:m => div(A.M[m].receita, A.M[m].pac.size), fmt: fmtMoney, tot: () => A.recPac }, { l:'Ticket médio', f:m => div(A.M[m].receita, A.M[m].eleg), fmt: fmtMoney2, tot: () => A.ticket }])}
@@ -3303,19 +3305,23 @@ function batchForm(){
 function commitBatch(){
   const payer = $('bPayer').value, ci = $('bCi').value, cf = $('bCf').value, envio = $('bEnv').value;
   if (!payer || !ci || !cf) return toast('Informe a operadora e a competência (início e fim).', 'bad');
+  addBatch(payer, ci, cf, envio);
+  if (SIMP.also && SIMP.map2) { const sv = [SIMP.kind, SIMP.map]; SIMP.kind = SIMP.also; SIMP.map = SIMP.map2; try { addBatch(payer, ci, cf, envio); } finally { SIMP.kind = sv[0]; SIMP.map = sv[1]; } }
+  syncPayers([payer]); resetAll(); toast(SIMP.also && SIMP.map2 ? 'Arquivo importado como faturamento e demonstrativo.' : 'Arquivo importado.', 'good'); SIMP = null; if (typeof FT2 !== 'undefined') { FT2 = 'lotes'; FSEL = null; FOP = ''; } show('fat');
+}
+function addBatch(payer, ci, cf, envio){
   const b = { id: uid(), payer, ci, cf, envio, file: SIMP.file, imported: new Date().toISOString(), pays: [] };
   if (SIMP.kind === 'fat') {
     b.rows = SIMP.rows.map(r => { const d = toDate(G(r,'date')); return d ? { p: patKey(G(r,'pid'), G(r,'name')), n: nameKey(G(r,'name')), d: isoLocal(d), guia: String(G(r,'guia')), guiaOp: String(G(r,'guiaOp')).trim(), v: toNum(G(r,'valor')) || 0, qty: toNum(G(r,'qty')), proc: String(G(r,'proc')), exec: String(G(r,'exec')), lote: String(G(r,'lote')) } : null; }).filter(Boolean);
     b.lotes = [...new Set(b.rows.map(r => r.lote).filter(Boolean))]; S.fat.push(b);
-    logImport('fat', b.rows.length, `${payer} · ${b.lotes.length} lote(s) · ${fmtMoney(b.rows.reduce((s,r)=>s+r.v,0))}`);
+    logImport('fat', b.rows.length, `${payer} · ${b.lotes.length} lote(s) · ${fmtMoney(b.rows.reduce((s,r)=>s+r.v,0))}`, b.id);
   } else {
     b.items = SIMP.rows.map(r => { const d = toDate(G(r,'date')); if (!d) return null; const gl = toNum(G(r,'gl')) || 0;
       return { p: patKey('', G(r,'name')), d: isoLocal(d), guia: String(G(r,'guia')), code: String(G(r,'code')).replace(/\D/g,''), desc: String(G(r,'desc')), qty: toNum(G(r,'qty')) || 1,
         inf: toNum(G(r,'inf')) || 0, lib: toNum(G(r,'lib')) ?? Math.max(0,(toNum(G(r,'inf'))||0) - gl), gl, gcode: String(G(r,'gcode')), gdesc: String(G(r,'gdesc')), rs: gl > 0 ? 'Pendente de análise' : '', rr: null, rc: null, rd: '' }; }).filter(Boolean);
     b.protocolo = [...new Set(SIMP.rows.map(r => String(G(r,'protocolo'))).filter(Boolean))].join(', '); b.lotes = [...new Set(SIMP.rows.map(r => String(G(r,'lote'))).filter(Boolean))];
-    S.dem.push(b); logImport('dem', b.items.length, `${payer} · glosado ${fmtMoney(b.items.reduce((s,i)=>s+i.gl,0))}`);
+    S.dem.push(b); logImport('dem', b.items.length, `${payer} · glosado ${fmtMoney(b.items.reduce((s,i)=>s+i.gl,0))}`, b.id);
   }
-  syncPayers([payer]); resetAll(); toast('Arquivo importado.', 'good'); SIMP = null; if (typeof FT2 !== 'undefined') { FT2 = 'lotes'; FSEL = null; FOP = ''; } show('fat');
 }
 
 /* ---------- Particular e recebimentos ---------- */
@@ -3326,7 +3332,7 @@ function previewPart(){
   workBox().innerHTML = `<div class="card"><h3>Controle do particular${badge()}</h3>${notice('good', `<b>${SIMP.out.length} lançamento(s)</b> · cobrado ${fmtMoney2(tot)} · pago ${fmtMoney2(pago)}.`)}
     <div class="row end">${cancelBtn()}<button class="btn" onclick="commitPart('append')">Adicionar</button><button class="btn pdf" onclick="commitPart('replace')">Substituir o controle do particular</button></div></div>`;
 }
-function commitPart(mode){ if (mode === 'replace') S.part = []; S.part.push(...SIMP.out); logImport('part', SIMP.out.length, mode === 'replace' ? 'Substituição' : 'Adição'); resetAll(); toast('Controle do particular importado.', 'good'); SIMP = null; show('caixa'); }
+function commitPart(mode){ const impId = uid(); SIMP.out.forEach(x => x.s = impId); if (mode === 'replace') S.part = []; S.part.push(...SIMP.out); logImport('part', SIMP.out.length, mode === 'replace' ? 'Substituição' : 'Adição', impId); resetAll(); toast('Controle do particular importado.', 'good'); SIMP = null; show('caixa'); }
 function previewReceb(){
   const batches = S.fat.concat(S.dem); const res = [], miss = [];
   SIMP.rows.forEach(r => { const payer = String(G(r,'payer')); const ref = String(G(r,'ref')).trim(); const d = toDate(G(r,'data')); const v = toNum(G(r,'valor')); if (!d || !isNum(v)) return;
@@ -3335,7 +3341,7 @@ function previewReceb(){
     (b ? res : miss).push({ b, payer, ref, d: isoLocal(d), v }); });
   SIMP.out = res;
   workBox().innerHTML = `<div class="card"><h3>Recebimentos de convênios${badge()}</h3>${notice(miss.length ? 'warn' : 'good', `<b>${res.length} pagamento(s)</b> vinculados a lotes importados.${miss.length ? ` ${miss.length} sem lote correspondente: ${miss.slice(0,5).map(m => esc(m.payer + ' ' + m.ref)).join('; ')}.` : ''}`)}
-    <div class="row end">${cancelBtn()}<button class="btn pdf" onclick="SIMP.out.forEach(x=>x.b.pays.push({d:x.d,v:x.v,obs:'Importado'}));logImport('receb',SIMP.out.length,'Pagamentos vinculados');resetAll();SIMP=null;show('fat');toast('Pagamentos vinculados.','good')">Vincular pagamentos</button></div></div>`;
+    <div class="row end">${cancelBtn()}<button class="btn pdf" onclick="ImpMgr.commitReceb()">Vincular pagamentos</button></div></div>`;
 }
 
 /* ---------- Sessões faturadas e de-para ---------- */
@@ -4822,8 +4828,8 @@ function fatImportar(){ const hist = (S.imports||[]).filter(i => ['fat','dem','r
     ${card('2. Demonstrativo de análise', 'Arquivo da operadora com o resultado da análise da conta: valor apresentado, liberado e glosado por item, com o motivo da glosa.', `<button class="btn pdf" onclick="smartImport('dem')">Importar demonstrativo</button>`)}
     ${card('3. Recebimentos', 'Planilha com os pagamentos recebidos das operadoras (data e valor por lote). Também é possível lançar à mão em cada lote.', `<button class="btn" onclick="smartImport('receb')">Importar recebimentos</button> <button class="btn ghost" onclick="downloadModels()">Modelo</button>`)}
     ${card('4. Extrato de recurso de glosa', 'Planilha do recurso enviado à operadora ou do retorno do recurso (guia, valor recorrido, valor acatado, parecer). Atualiza as glosas; as que ficaram fora do recurso são marcadas como não recorridas.', `<button class="btn pdf" onclick="recImport()">Importar extrato de recurso</button>`)}</div>
-    <div class="card"><h3>Últimas importações</h3><table class="tbl sm"><thead><tr><th>Data</th><th>Tipo</th><th>Arquivo</th><th>Linhas</th><th>Detalhe</th></tr></thead><tbody>${hist.map(i => `<tr><td>${new Date(i.date).toLocaleString('pt-BR')}</td><td>${({ fat:'Faturamento enviado', dem:'Demonstrativo', receb:'Recebimentos', recurso:'Extrato de recurso' })[i.type]}</td><td><small>${esc(i.file||'')}</small></td><td class="num">${fmtNum(i.count)}</td><td><small>${esc(i.note||'')}</small></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Nenhuma importação de faturamento.</td></tr>'}</tbody></table>
-    <div class="howto"><b>Como funciona:</b> ao importar, você escolhe a operadora e a competência (mês dos atendimentos). O arquivo passa a aparecer em <b>Faturamentos importados</b>, onde você lança a data de envio e os pagamentos. Nomes de pacientes não são gravados.</div></div>`; }
+    ${ImpMgr.table(['fat','dem','receb','recurso'])}
+    <div class="howto"><b>Como funciona:</b> ao importar, você escolhe a operadora e a competência (mês dos atendimentos). O arquivo passa a aparecer em <b>Faturamentos importados</b>, onde você lança a data de envio e os pagamentos. Nomes de pacientes não são gravados.</div>`; }
 
 /* =========================================================
    19 - Importação do extrato de recurso de glosa
@@ -4902,5 +4908,6 @@ fatGlosas = function(){ const h = _fatGlosas0(); if (!S.dem.length) return h;
 <script src="agenda-import.js"></script>
 <script src="agenda-export.js"></script>
 <script src="agenda-adv.js"></script>
+<script src="imports-mgr.js"></script>
 </body>
 </html>
