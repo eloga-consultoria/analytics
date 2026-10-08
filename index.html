@@ -672,7 +672,7 @@ const PDFW_B64='LyoqCiAqIEBsaWNzdGFydCBUaGUgZm9sbG93aW5nIGlzIHRoZSBlbnRpcmUgbGlj
    01 - Núcleo: campos, estado, armazenamento e utilitários
    ========================================================= */
 'use strict';
-const APP_VERSION = '3.0.0-beta.10';
+const APP_VERSION = '3.0.0-beta.11';
 const STORE_KEY = 'eloga_painel_financeiro_v1';
 const $ = id => document.getElementById(id);
 
@@ -1796,7 +1796,7 @@ function chartImage(cfg, w=1400, h=620){
    ========================================================= */
 const PAGES = [
   ['clientes','Visão geral de clientes'],['exec','Visão executiva'],['empresa','Cadastro do cliente'],['cad','Cadastros'],['agenda','Agenda e produção'],['fat','Faturamento e glosas'],['rep','Repasse'],['fisc','Notas e impostos'],['diag','Diagnóstico por pilares'],['dados','Preencher dados'],['importar','Importar arquivos'],
-  ['rent','Rentabilidade'],['ciclo','Ciclo de receita'],['caixa','Caixa e recebimento'],['prod','Produção'],
+  ['rent','Rentabilidade'],['ciclo','Ciclo de receita'],['caixa','Caixa e recebimento'],['prod','Produção'],['fluxo','Fluxo de caixa do cliente'],
   ['ind','Indicadores'],['estr','Estratégias'],['rel','Relatório'],['glos','Glossário']
 ];
 let PAGE = 'exec';
@@ -2150,7 +2150,7 @@ function renderGlos(){
   ${notice('warn','<b>Referências externas não são metas automáticas.</b> Parâmetros hospitalares e internacionais indicam o que monitorar. A meta de cada cliente parte da própria linha de base (3 a 6 meses) e de uma melhoria realista.')}</div>`;
 }
 
-const RENDER = { diag:()=>renderDiag(), fisc:()=>renderFisc(), e_fisc:()=>renderEFisc(), e_proj:()=>renderEProj(), e_metas:()=>renderEMetas(), e_contr:()=>renderEContr(), e_parc:()=>renderEParc(), e_entr:()=>renderEEntr(), e_painel:()=>renderEPainel(), e_cli:()=>renderECli(), e_ent:()=>renderEEnt(), e_ag:()=>renderEAg(), e_fin:()=>renderEFin(), e_horas:()=>renderEHoras(), cad:()=>renderCad(), agenda:()=>renderAgenda(), fat:()=>renderFat(), rep:()=>renderRep(), exec:renderExec, empresa:renderEmpresa, clientes:renderClientes, dados:renderDados, importar:()=>renderImport(), rent:renderRent, ciclo:renderCiclo, caixa:renderCaixa, prod:renderProd, ind:renderInd, estr:renderEstr, rel:renderRel, glos:renderGlos };
+const RENDER = { diag:()=>renderDiag(), fisc:()=>renderFisc(), e_fisc:()=>renderEFisc(), e_proj:()=>renderEProj(), e_metas:()=>renderEMetas(), e_contr:()=>renderEContr(), e_parc:()=>renderEParc(), e_entr:()=>renderEEntr(), e_painel:()=>renderEPainel(), e_cli:()=>renderECli(), e_ent:()=>renderEEnt(), e_ag:()=>renderEAg(), e_fin:()=>renderEFin(), e_horas:()=>renderEHoras(), cad:()=>renderCad(), agenda:()=>renderAgenda(), fat:()=>renderFat(), rep:()=>renderRep(), exec:renderExec, empresa:renderEmpresa, clientes:renderClientes, dados:renderDados, importar:()=>renderImport(), rent:renderRent, ciclo:renderCiclo, caixa:renderCaixa, fluxo:()=>window.renderFluxo(), prod:renderProd, ind:renderInd, estr:renderEstr, rel:renderRel, glos:renderGlos };
 
 /* ---------- Clientes ---------- */
 function refreshClientSelect(){
@@ -3762,7 +3762,7 @@ function renderEHoras(){
 function exportEloga(){ download(`ELOGA_gestao_interna_${todayIso()}.json`, JSON.stringify({ app:'ELOGA-GESTAO', version:APP_VERSION, exported:new Date().toISOString(), eloga: E() }, null, 1), 'application/json'); toast('Backup da gestão ELOGA gerado.'); }
 function setMode(m){ MODE = m; buildNav(); document.body.classList.toggle('mode-eloga', m === 'eloga'); $('modeBtn').textContent = m === 'eloga' ? '← Voltar aos clientes' : 'Gestão ELOGA'; show(m === 'eloga' ? 'e_painel' : 'clientes'); }
 const NAV_CLI = [
-  ['1','Importação',[['importar','Importar arquivos'],['soon','Leitor de PDFs (autodiagnóstico, proposta, plano)'],['soon','Fluxo de caixa do cliente (planilha modelo)']]],
+  ['1','Importação',[['importar','Importar arquivos'],['soon','Leitor de PDFs (autodiagnóstico, proposta, plano)'],['fluxo','Fluxo de caixa do cliente (planilha modelo)']]],
   ['2','Preenchimento',[['empresa','Cadastro do cliente'],['dados','Preencher dados'],['cad','Cadastros']]],
   ['3','Análise',[['exec','Visão executiva'],['agenda','Agenda e produção'],['rent','Rentabilidade'],['ciclo','Ciclo de receita'],['fat','Faturamento e glosas'],['caixa','Caixa e recebimento'],['rep','Repasse'],['fisc','Notas e impostos'],['ind','Indicadores']]],
   ['4','Diagnóstico',[['diag','Diagnóstico por pilares'],['estr','Estratégias']]],
@@ -4842,15 +4842,18 @@ KINDS.recurso = { n:'Extrato de recurso de glosa', fields:[
   {k:'guia', l:'Número da guia', req:1, syn:['guia','n guia','numero guia','nro guia prestador','guia prestador','guia operadora']},
   {k:'date', l:'Data do atendimento', syn:['data realizacao','data atendimento','data execucao','data do atendimento']},
   {k:'code', l:'Código do procedimento', syn:['codigo servico','codigo procedimento','codigo tuss','cod procedimento','codigo']},
-  {k:'vgl', l:'Valor glosado', syn:['valor glosado','valor da glosa','valor glosa']},
-  {k:'rr', l:'Valor recorrido', syn:['valor recorrido','valor do recurso','valor recursado','valor solicitado','valor contestado']},
-  {k:'rc', l:'Valor recuperado / acatado / pago no recurso', syn:['valor acatado','valor recuperado','valor deferido','valor liberado recurso','valor pago recurso','valor aceito']},
+  {k:'vgl', l:'Valor glosado', syn:['valor glosado','valor da glosa','valor glosa','vlr glosado','vlr glosa']},
+  {k:'rr', l:'Valor recorrido', syn:['valor recorrido','valor do recurso','valor recursado','valor solicitado','valor contestado','vlr recorrido','vlr recurso']},
+  {k:'rc', l:'Valor recuperado / acatado / pago no recurso', syn:['valor acatado','valor recuperado','valor deferido','valor liberado recurso','valor pago recurso','valor aceito','vlr acatado','vlr recuperado','vlr deferido']},
   {k:'status', l:'Situação / parecer do recurso', syn:['situacao','status','parecer','resultado','situacao do recurso']},
   {k:'rd', l:'Data do recurso', syn:['data do recurso','data recurso','data envio recurso','data de envio']},
-  {k:'protocolo', l:'Protocolo do recurso', syn:['protocolo recurso','protocolo','n protocolo']}]};
+  {k:'protocolo', l:'Protocolo do recurso', syn:['protocolo recurso','protocolo','n protocolo']},
+  {k:'rdr', l:'Data da resposta da operadora (2ª análise)', syn:['data resposta','data retorno','data do retorno','data do parecer','data analise','data da resposta','dt resposta','dt retorno']},
+  {k:'mot', l:'Motivo / justificativa do parecer', syn:['motivo parecer','justificativa','motivo indeferimento','motivo da negativa','observacao','motivo']}]};
 const _smartNextRec = smartNext; smartNext = function(){ if (SIMP && SIMP.kind === 'recurso') return recPreview(); return _smartNextRec(); };
 const gnorm = g => String(g ?? '').replace(/\D/g, '').replace(/^0+/, '');
 function recStatus(txt, rr, rc){ const t = norm(txt);
+  if (typeof RECIMP !== 'undefined' && RECIMP) { if (RECIMP.tipo === 'enviado') return 'Recurso enviado'; const o = (RECIMP.stmap || {})[t]; if (t && o) return o; }
   if (/parcial/.test(t)) return 'Deferido parcial';
   if (/indefer|negad|mantid|recusad|improced|nao acat/.test(t)) return 'Indeferido';
   if (/defer|acatad|aceit|aprovad|proced|pago/.test(t)) return isNum(rc) && isNum(rr) && rc < rr - 0.01 ? 'Deferido parcial' : 'Deferido total';
@@ -4859,7 +4862,7 @@ function recStatus(txt, rr, rc){ const t = norm(txt);
 function recImport(){ SIMP = { expect:'recurso' }; const inp = $('fileSheet'); inp.value = ''; inp.accept = '.xlsx,.xls,.csv,.txt'; inp.onchange = e => smartRead(e.target.files[0]); inp.click(); }
 let RECIMP = null;
 function recMatch(payer, demIds){
-  const lines = SIMP.rows.map(r => ({ g: gnorm(G(r,'guia')), code: String(G(r,'code')).replace(/\D/g,''), vgl: toNum(G(r,'vgl')), rr: toNum(G(r,'rr')), rc: toNum(G(r,'rc')), st: String(G(r,'status')), rd: toDate(G(r,'rd')), prot: String(G(r,'protocolo')) })).filter(l => l.g);
+  const lines = SIMP.rows.map(r => ({ g: gnorm(G(r,'guia')), code: String(G(r,'code')).replace(/\D/g,''), vgl: toNum(G(r,'vgl')), rr: toNum(G(r,'rr')), rc: toNum(G(r,'rc')), st: String(G(r,'status')), rd: toDate(G(r,'rd')), prot: String(G(r,'protocolo')), rdr: toDate(G(r,'rdr')), mot: String(G(r,'mot')) })).filter(l => l.g);
   const items = []; S.dem.forEach((b, bi) => { if (norm(b.payer) !== norm(payer) || (demIds && !demIds.includes(b.id))) return; b.items.forEach((it, ii) => { if (it.gl > 0) items.push({ b, bi, it, ii, g: gnorm(it.guia), used:false }); }); });
   const byG = {}; items.forEach(x => (byG[x.g] = byG[x.g] || []).push(x));
   const matched = [], semItem = [];
@@ -4896,7 +4899,7 @@ function recForm(){
 }
 function recCommit(){
   const M = RECIMP.M; if (!M) return; const markNR = $('recMarkNR') && $('recMarkNR').checked; let nr = 0;
-  M.matched.forEach(({ x, l }) => { const it = x.it; const rr = isNum(l.rr) ? l.rr : it.gl; it.rr = rr; if (isNum(l.rc)) it.rc = l.rc; it.rs = recStatus(l.st, rr, l.rc); if (l.rd) it.rd = isoLocal(l.rd); else if (!it.rd) it.rd = todayIso(); if (l.prot) it.rprot = l.prot; });
+  M.matched.forEach(({ x, l }) => { const it = x.it; const rr = isNum(l.rr) ? l.rr : it.gl; it.rr = rr; if (isNum(l.rc)) it.rc = l.rc; it.rs = recStatus(l.st, rr, l.rc); if (l.rd) it.rd = isoLocal(l.rd); else if (!it.rd) it.rd = todayIso(); if (l.prot) it.rprot = l.prot; if (l.mot) it.rmot = l.mot; if (l.rdr) it.rresp = isoLocal(l.rdr); });
   if (markNR) M.naoRec.forEach(x => { if (!x.it.rs || x.it.rs === 'Pendente de análise') { x.it.rs = 'Não será recorrida'; x.it.rr = 0; nr++; } });
   logImport('recurso', M.matched.length, `${RECIMP.payer}: ${M.matched.length} recorridas, ${nr} marcadas como não recorridas`);
   RECIMP = null; SIMP = null; workBox().innerHTML = ''; resetAll();
@@ -4915,5 +4918,7 @@ fatGlosas = function(){ const h = _fatGlosas0(); if (!S.dem.length) return h;
 <script src="unit-fat.js"></script>
 <script src="flow.js"></script>
 <script src="exec-plus.js"></script>
+<script src="import-help.js"></script>
+<script src="caixa-fluxo.js"></script>
 </body>
 </html>
