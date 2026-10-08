@@ -672,7 +672,7 @@ const PDFW_B64='LyoqCiAqIEBsaWNzdGFydCBUaGUgZm9sbG93aW5nIGlzIHRoZSBlbnRpcmUgbGlj
    01 - Núcleo: campos, estado, armazenamento e utilitários
    ========================================================= */
 'use strict';
-const APP_VERSION = '3.0.0-beta.8';
+const APP_VERSION = '3.0.0-beta.9';
 const STORE_KEY = 'eloga_painel_financeiro_v1';
 const $ = id => document.getElementById(id);
 
@@ -1795,7 +1795,7 @@ function chartImage(cfg, w=1400, h=620){
    05 - Interface: navegação, páginas e componentes
    ========================================================= */
 const PAGES = [
-  ['clientes','Visão geral de clientes'],['exec','Visão executiva'],['empresa','Cadastro do cliente'],['cad','Cadastros'],['agenda','Agenda e atendimentos'],['fat','Faturamento e glosas'],['rep','Repasse'],['fisc','Notas e impostos'],['diag','Diagnóstico por pilares'],['dados','Preencher dados'],['importar','Importar arquivos'],
+  ['clientes','Visão geral de clientes'],['exec','Visão executiva'],['empresa','Cadastro do cliente'],['cad','Cadastros'],['agenda','Agenda e produção'],['fat','Faturamento e glosas'],['rep','Repasse'],['fisc','Notas e impostos'],['diag','Diagnóstico por pilares'],['dados','Preencher dados'],['importar','Importar arquivos'],
   ['rent','Rentabilidade'],['ciclo','Ciclo de receita'],['caixa','Caixa e recebimento'],['prod','Produção'],
   ['ind','Indicadores'],['estr','Estratégias'],['rel','Relatório'],['glos','Glossário']
 ];
@@ -3197,7 +3197,7 @@ function keysSave(){ new Set(S.agenda.map(stKey)).forEach(k => { if (!(k in S.ca
 /* ---------- Tela: Agenda e atendimentos ---------- */
 let AGDIM = 'prof', AGTAB = 'esp';
 function renderAgenda(){
-  if (!S.agenda.length) { $('pg_agenda').innerHTML = head('Agenda e atendimentos','Indicadores de agendamento, ocupação, absenteísmo e pacientes.') + `<div class="card">${notice('warn','<b>Nenhuma agenda importada.</b> Importe o relatório de atendimentos do sistema da clínica.')}<button class="btn" onclick="smartImport('agenda')">Importar arquivo da agenda</button></div>`; return; }
+  if (!S.agenda.length) { $('pg_agenda').innerHTML = head('Agenda e produção','Indicadores de agendamento, ocupação, absenteísmo e pacientes.') + `<div class="card">${notice('warn','<b>Nenhuma agenda importada.</b> Importe o relatório de atendimentos do sistema da clínica.')}<button class="btn" onclick="smartImport('agenda')">Importar arquivo da agenda</button></div>`; return; }
   const A = agStats(); const F = A.F; const ms = A.ms; const all = S.agenda; const uniq = k => [...new Set(all.map(r => r[k]).filter(Boolean))].sort();
   const sel = (k, l, list) => `<div class="field"><label>${l}</label><select onchange="S.agf=Object.assign(agFilter(),{${k}:this.value});agReset();save();renderAgenda()"><option value="">Todos</option>${list.map(v=>`<option ${F[k]===v?'selected':''}>${esc(v)}</option>`).join('')}</select></div>`;
   const k = (sig, n, val, d, cls='neu', sub='') => `<div class="kpi ${cls}"><div class="kl"><span class="sig">${sig}</span>${n}</div><div class="kv">${val}</div>${sub?`<div class="kt"><span class="kb">${sub}</span></div>`:''}<div class="kd">${d}</div></div>`;
@@ -3218,7 +3218,7 @@ function renderAgenda(){
   const dimMonthTable = (dk, metric) => { const names = Object.entries(A.dims[dk]).sort((a,b)=> metric==='receita' ? b[1].receita - a[1].receita : b[1].realizado - a[1].realizado).map(x=>x[0]);
     if (metric === 'status') return monthTable(ms, names.flatMap(n => [{ l:n, f:m => { const g = A.dims[dk][n].bm[m]; return g ? pastN(g) + g.agendado : 0; }, cls:'b' }].concat(kinds.map(kk => ({ l:'   ' + KSHORT[kk], dot:KCOL[kk], f:m => { const g = A.dims[dk][n].bm[m]; return g ? g[kk] : 0; } })))), { first: 'Grupo / status' });
     return monthTable(ms, names.map(n => ({ l:n, f:m => { const g = A.dims[dk][n].bm[m]; return g ? g.receita : 0; }, fmt: fmtMoney })).concat([{ l:'Total', cls:'b', f:m => A.M[m].receita, fmt: fmtMoney }]), { first: ({payer:'Convênio',esp:'Especialidade',proc:'Procedimento',prof:'Profissional'})[dk] }); };
-  $('pg_agenda').innerHTML = head('Agenda e atendimentos','Agendamento, ocupação, absenteísmo, pacientes e receita estimada, com números exatos por mês. Use o período acima e os filtros abaixo.') + `
+  $('pg_agenda').innerHTML = head('Agenda e produção','Agendamento, ocupação, absenteísmo, pacientes e receita estimada, com números exatos por mês. Use o período acima e os filtros abaixo.') + `
   <div class="card filters">${sel('prof','Profissional',uniq('prof'))}${sel('esp','Especialidade',uniq('esp'))}${sel('proc','Procedimento',uniq('proc'))}${sel('payer','Convênio',uniq('payer'))}${AgImp.periodFields()}<div class="field"><label>&nbsp;</label><button class="btn ghost" onclick="S.agf={};agReset();save();renderAgenda()">Limpar filtros</button></div><div class="field"><label>&nbsp;</label><button class="btn" onclick="smartImport('agenda')">Atualizar agenda</button></div></div>${AgImp.periodNote()}
   ${dq.length ? notice('warn', `<b>Qualidade do registro:</b><ul class="cons">${dq.map(x=>`<li>${x}</li>`).join('')}</ul>`) : ''}
   <div class="kpis">
@@ -3312,6 +3312,7 @@ function commitBatch(){
 }
 function addBatch(payer, ci, cf, envio){
   const b = { id: uid(), payer, ci, cf, envio, file: SIMP.file, imported: new Date().toISOString(), pays: [] };
+  b.unit = SIMP.unit || ''; b.cnpj = SIMP.cnpj || ''; b.prest = SIMP.prest || '';
   if (SIMP.kind === 'fat') {
     b.rows = SIMP.rows.map(r => { const d = toDate(G(r,'date')); return d ? { p: patKey(G(r,'pid'), G(r,'name')), n: nameKey(G(r,'name')), d: isoLocal(d), guia: String(G(r,'guia')), guiaOp: String(G(r,'guiaOp')).trim(), v: toNum(G(r,'valor')) || 0, qty: toNum(G(r,'qty')), proc: String(G(r,'proc')), exec: String(G(r,'exec')), lote: String(G(r,'lote')) } : null; }).filter(Boolean);
     b.lotes = [...new Set(b.rows.map(r => r.lote).filter(Boolean))]; S.fat.push(b);
@@ -3763,14 +3764,14 @@ function setMode(m){ MODE = m; buildNav(); document.body.classList.toggle('mode-
 const NAV_CLI = [
   ['1','Importação',[['importar','Importar arquivos'],['soon','Leitor de PDFs (autodiagnóstico, proposta, plano)'],['soon','Fluxo de caixa do cliente (planilha modelo)']]],
   ['2','Preenchimento',[['empresa','Cadastro do cliente'],['dados','Preencher dados'],['cad','Cadastros']]],
-  ['3','Análise',[['exec','Visão executiva'],['agenda','Agenda e atendimentos'],['rent','Rentabilidade'],['ciclo','Ciclo de receita'],['fat','Faturamento e glosas'],['caixa','Caixa e recebimento'],['prod','Produção'],['rep','Repasse'],['fisc','Notas e impostos'],['ind','Indicadores']]],
+  ['3','Análise',[['exec','Visão executiva'],['agenda','Agenda e produção'],['rent','Rentabilidade'],['ciclo','Ciclo de receita'],['fat','Faturamento e glosas'],['caixa','Caixa e recebimento'],['rep','Repasse'],['fisc','Notas e impostos'],['ind','Indicadores']]],
   ['4','Diagnóstico',[['diag','Diagnóstico por pilares'],['estr','Estratégias']]],
   ['5','Documentos',[['rel','Relatório'],['glos','Glossário']]]
 ];
 const NAV_CLOSED = {};
 function navToggle(k){ NAV_CLOSED[k] = !NAV_CLOSED[k]; buildNav(); }
 function buildNav(){
-  const act = typeof PAGE !== 'undefined' ? PAGE : '';
+  const act = typeof PAGE !== 'undefined' ? (PAGE === 'prod' ? 'agenda' : PAGE) : '';
   const top = (k, l, ic, cls) => `<div class="ng ${cls||''}"><button data-p="${k}" class="ntop ${k===act?'active':''}" onclick="${k==='eloga'?"setMode('eloga')":`show('${k}')`}"><i>${ic}</i>${l}</button></div>`;
   const grpHtml = (n,t,items,elo) => `<div class="ng ${elo?'elo':''} ${NAV_CLOSED[t]?'closed':''}"><button class="ngh" onclick="navToggle('${t}')"><i>${n}</i>${t}<b>▼</b></button><div class="ngi">${items.map(([k,l]) => k==='soon' ? `<div class="soon">${l}<em>em breve</em></div>` : `<button data-p="${k}" class="${k===act?'active':''}" onclick="show('${k}')">${l}</button>`).join('')}</div></div>`;
   let html;
@@ -4911,5 +4912,7 @@ fatGlosas = function(){ const h = _fatGlosas0(); if (!S.dem.length) return h;
 <script src="agenda-adv.js"></script>
 <script src="imports-mgr.js"></script>
 <script src="ind-info.js"></script>
+<script src="unit-fat.js"></script>
+<script src="flow.js"></script>
 </body>
 </html>

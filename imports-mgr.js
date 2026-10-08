@@ -69,7 +69,8 @@
   function bar(page) {
     const sec = document.getElementById('pg_' + page); if (!sec || !BARS[page]) return;
     sec.querySelectorAll('.impbar').forEach(e => e.remove());
-    const html = `<div class="card impbar"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b>Importar nesta aba:</b>${BARS[page].map(([l, f]) => `<button class="btn ghost sm" onclick="${f}">${l}</button>`).join('')}<a href="#" class="muted" onclick="show('importar');return false">Ver arquivos importados</a></div></div>`;
+    const tabs = (page === 'agenda' || page === 'prod') ? `<div class="subtabs" style="margin-bottom:10px"><button class="${page === 'agenda' ? 'active' : ''}" onclick="show('agenda')">Agenda e atendimentos</button><button class="${page === 'prod' ? 'active' : ''}" onclick="show('prod')">Produção e resultado financeiro</button></div>` : '';
+    const html = `<div class="card impbar">${tabs}<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b>Importar nesta aba:</b>${BARS[page].map(([l, f]) => `<button class="btn ghost sm" onclick="${f}">${l}</button>`).join('')}<a href="#" class="muted" onclick="show('importar');return false">Ver arquivos importados</a></div></div>`;
     const after = sec.querySelector('details.period') || sec.querySelector('.phead'); if (after) after.insertAdjacentHTML('afterend', html); else sec.insertAdjacentHTML('afterbegin', html);
   }
   const FN = { agenda: 'renderAgenda', ciclo: 'renderCiclo', prod: 'renderProd', rent: 'renderRent', caixa: 'renderCaixa' };
