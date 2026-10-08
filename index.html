@@ -672,7 +672,7 @@ const PDFW_B64='LyoqCiAqIEBsaWNzdGFydCBUaGUgZm9sbG93aW5nIGlzIHRoZSBlbnRpcmUgbGlj
    01 - Núcleo: campos, estado, armazenamento e utilitários
    ========================================================= */
 'use strict';
-const APP_VERSION = '3.0.0-beta.7';
+const APP_VERSION = '3.0.0-beta.8';
 const STORE_KEY = 'eloga_painel_financeiro_v1';
 const $ = id => document.getElementById(id);
 
@@ -936,16 +936,17 @@ function derived(){
   if (_derivedCache) return _derivedCache;
   const out = {};
   const M = ym => (out[ym] = out[ym] || {_lag:[], _n:0});
+  const HASAG = S.agenda.length > 0; // agenda classificada é a fonte de ag/real/faltas/elegíveis; o detalhe antigo não pode duplicá-la
   for (const r of S.detail.attend) {
     const d = toDate(r.date); const ym = r.ym || ymOfDate(d); if (!ym) continue;
     const o = M(ym); const k = statusKind(r.status);
     o._n++;
-    o.ag = (o.ag||0) + (k !== 'canc_pac' ? 1 : 0);
+    if (!HASAG) o.ag = (o.ag||0) + (k !== 'canc_pac' ? 1 : 0);
     if (k === 'realizado') {
-      o.real = (o.real||0) + 1;
+      if (!HASAG) o.real = (o.real||0) + 1;
       const elig = yes(r.elig); const isElig = elig !== false;
       if (isElig) {
-        o.elegiveis = (o.elegiveis||0) + 1;
+        if (!HASAG) o.elegiveis = (o.elegiveis||0) + 1;
         let posted = yes(r.posted); if (posted === null) posted = !!(toDate(r.postDate) || toNum(r.billed));
         if (posted) o.lancados = (o.lancados||0) + 1;
         else o._missv = (o._missv||0) + (toNum(r.value) || 0);
@@ -955,8 +956,8 @@ function derived(){
       const billed = toNum(r.billed) ?? toNum(r.value);
       if (isConv && isNum(billed)) o.fat_conv = (o.fat_conv||0) + billed;
     }
-    if (k === 'falta') o.faltas = (o.faltas||0) + 1;
-    if (k === 'canc_clin') o.canc_clin = (o.canc_clin||0) + 1;
+    if (k === 'falta' && !HASAG) o.faltas = (o.faltas||0) + 1;
+    if (k === 'canc_clin' && !HASAG) o.canc_clin = (o.canc_clin||0) + 1;
     if (!S.detail.denials.length) {
       const g = toNum(r.glosa); if (isNum(g)) o.glosa_ini = (o.glosa_ini||0) + g;
       const rc = toNum(r.recovered); if (isNum(rc)) o.recuperado = (o.recuperado||0) + rc;
@@ -1693,7 +1694,7 @@ function cfgGlosa(){
     options:{ scales:{ y:{ ticks:{ callback: moneyTick } } }, plugins:{ vlabels:{ fmt: v => fmtCompact(v).replace('R$ ','') }, tooltip:{ callbacks:{ label: tipMoney } } } } };
 }
 function cfgAging(){
-  const ym = [...windowMonths()].reverse().find(m => isNum(B(m).ar_tot)); if (!ym) return null; const x = B(ym);
+  const rev = [...windowMonths()].reverse(); const ym = rev.find(m => isNum(B(m).ar_tot) && B(m).ar_tot > 0.01) || rev.find(m => isNum(B(m).ar_tot)); if (!ym) return null; const x = B(ym);
   return { type:'bar', data:{ labels:['0–30 dias','31–60 dias','61–90 dias','Acima de 90 dias'], datasets:[{ label:'Saldo vencido ('+monthLabel(ym)+')', data:[x.ar_0_30,x.ar_31_60,x.ar_61_90,x.ar_90], backgroundColor:[PAL.good,PAL.warn,'#E07A2F',PAL.bad] }] },
     options:{ plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: tipMoney } } }, scales:{ y:{ ticks:{ callback: moneyTick } } } } };
 }
@@ -4909,5 +4910,6 @@ fatGlosas = function(){ const h = _fatGlosas0(); if (!S.dem.length) return h;
 <script src="agenda-export.js"></script>
 <script src="agenda-adv.js"></script>
 <script src="imports-mgr.js"></script>
+<script src="ind-info.js"></script>
 </body>
 </html>
