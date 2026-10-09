@@ -12,7 +12,7 @@
     esp: 'Especialidade (Psicologia, Fonoaudiologia, TO...). Usada nos cortes por especialidade e na fila de espera.',
     pid: 'Código do paciente no sistema da clínica. Vira um código irreversível (LGPD).',
     name: 'Só serve para identificar o mesmo paciente quando não há código. O nome não é gravado.',
-    payer: 'Convênio ou "Particular". Define o preço da tabela e a receita estimada. Obrigatório.',
+    payer: 'Convênio ou "Particular". Define o preço da tabela e a receita estimada. Obrigatório, exceto em clínica de estética (sempre Particular).',
     proc: 'Procedimento realizado. Busca o valor na tabela de preços.',
     code: 'Código TUSS do procedimento. Ajuda a achar o preço quando o nome do procedimento varia.',
     status: 'Situação do agendamento no sistema da clínica (Atendido, Faltou, Cancelado...). Todas as taxas dependem dele. Obrigatório.',
@@ -43,7 +43,7 @@
       const d = toDate(G(r, 'date')); const prof = String(G(r, 'profAt')).trim() || String(G(r, 'prof')).trim();
       if (!d || !prof) { bad++; continue; }
       const bk = toDate(G(r, 'booked'));
-      recs.push({ d: isoLocal(d), h: String(G(r, 'time')).slice(0, 5), prof, esp: String(G(r, 'esp')).trim(), payer: String(G(r, 'payer')).trim() || 'Não informado',
+      recs.push({ d: isoLocal(d), h: String(G(r, 'time')).slice(0, 5), prof, esp: String(G(r, 'esp')).trim(), payer: String(G(r, 'payer')).trim() || defPayer() || 'Não informado',
         code: String(G(r, 'code')).replace(/\D/g, ''), proc: String(G(r, 'proc')).trim(), st: String(G(r, 'status')).trim(), bk: bk ? isoLocal(bk) : '', p: patKey(G(r, 'pid'), G(r, 'name')), n: nameKey(G(r, 'name')) });
       const u = String(G(r, 'unit')).trim(); if (u) recs[recs.length - 1].u = u;
     }

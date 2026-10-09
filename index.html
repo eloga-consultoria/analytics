@@ -672,7 +672,7 @@ const PDFW_B64='LyoqCiAqIEBsaWNzdGFydCBUaGUgZm9sbG93aW5nIGlzIHRoZSBlbnRpcmUgbGlj
    01 - Núcleo: campos, estado, armazenamento e utilitários
    ========================================================= */
 'use strict';
-const APP_VERSION = '3.0.0-beta.12';
+const APP_VERSION = '3.0.0-beta.13';
 const STORE_KEY = 'eloga_painel_financeiro_v1';
 const $ = id => document.getElementById(id);
 
@@ -2781,6 +2781,9 @@ function aoaToRows(aoa){
 }
 function sheetRows(ws){ return aoaToRows(XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:true, blankrows:false })); }
 
+/* ---------- Estética: sem operadora credenciada, o pagador é sempre "Particular" ---------- */
+const isEst = () => !!(S && S.meta && S.meta.segment === 'estetica');
+const defPayer = () => isEst() ? 'Particular' : '';
 /* ---------- Campos por tipo de arquivo ---------- */
 const KINDS = {
   agenda: { n:'Agenda / atendimentos', fields:[
@@ -2791,7 +2794,7 @@ const KINDS = {
     {k:'esp', l:'Especialidade', syn:['especialidade','area']},
     {k:'pid', l:'Código do paciente', syn:['id pac','codigo paciente','id paciente','prontuario']},
     {k:'name', l:'Nome do paciente (só para cruzar; não é gravado)', syn:['paciente','nome paciente','beneficiario']},
-    {k:'payer', l:'Convênio / operadora', req:1, syn:['operadora','convenio','fonte pagadora']},
+    {k:'payer', l:'Convênio / operadora', req:1, syn:['operadora','convenio','fonte pagadora','forma de pagamento','tipo de atendimento']},
     {k:'proc', l:'Procedimento', syn:['procedimento','servico']},
     {k:'code', l:'Código do procedimento', syn:['cod proced','codigo procedimento','tuss']},
     {k:'status', l:'Status', req:1, syn:['status','situacao','presenca']},
@@ -2799,8 +2802,9 @@ const KINDS = {
   tabela: { n:'Tabela de procedimentos e valores', fields:[
     {k:'payer', l:'Convênio / operadora', req:1, syn:['operadora','convenio']},
     {k:'code', l:'Código', syn:['codigo','cod fat','tuss']},
-    {k:'desc', l:'Descrição do procedimento', req:1, syn:['descricao','procedimento']},
-    {k:'group', l:'Grupo / especialidade', syn:['grupo','especialidade']},
+    {k:'desc', l:'Nome do procedimento', req:1, syn:['nome do procedimento','procedimento','servico','nome','descricao']},
+    {k:'det', l:'Descrição detalhada (opcional)', syn:['descricao detalhada','detalhamento','observacao']},
+    {k:'group', l:'Grupo / especialidade', syn:['grupo','especialidade','categoria']},
     {k:'value', l:'Valor', req:1, syn:['valor','preco']}]},
   fat: { n:'Atendimentos enviados ao faturamento', fields:[
     {k:'date', l:'Data do atendimento', req:1, syn:['dt atend','data atendimento','data realizacao','data']},
@@ -2844,6 +2848,7 @@ const KINDS = {
     {k:'data', l:'Data do pagamento', req:1, syn:['data do pagamento','data pagamento','data']},
     {k:'valor', l:'Valor pago', req:1, syn:['valor pago','valor']}]}
 };
+['agenda','tabela'].forEach(k => KINDS[k].fields.filter(f => f.k === 'payer').forEach(f => Object.defineProperty(f, 'req', { get: () => isEst() ? 0 : 1, configurable: true })));
 const BUILTIN_PROFILES = [
   { id:'isysmed_agenda', name:'iSysMed · Relatório de atendimentos', kind:'agenda', sig:['dt agenda','agenda','status','id pac','operadora'],
     map:{ date:'Dt.Agenda', time:'Hora', prof:'Agenda', profAt:'Prof.Atend.', esp:'Especialidade', pid:'Id Pac.', name:'Paciente', payer:'Operadora', code:'Cód.Proced.', proc:'Procedimento', status:'Status', booked:'Agendado em' } },
@@ -2983,9 +2988,9 @@ function badge(){ return SIMP.profile ? ` · <span class="chip ok">Reconhecido: 
 function cancelBtn(){ return `<button class="btn ghost" onclick="this.closest('.card').remove()">Cancelar</button>`; }
 
 function previewTable(){
-  SIMP.out = SIMP.rows.map(r => ({ payer: String(G(r,'payer')).trim(), code: String(G(r,'code')).replace(/\D/g,''), desc: String(G(r,'desc')).trim(), group: String(G(r,'group')).trim(), value: toNum(G(r,'value')) })).filter(t => t.payer && t.desc && isNum(t.value));
+  SIMP.out = SIMP.rows.map(r => ({ payer: String(G(r,'payer')).trim() || defPayer(), code: String(G(r,'code')).replace(/\D/g,''), desc: String(G(r,'desc')).trim(), det: String(G(r,'det')).trim(), group: String(G(r,'group')).trim(), value: toNum(G(r,'value')) })).filter(t => t.payer && t.desc && isNum(t.value));
   workBox().innerHTML = `<div class="card"><h3>Tabela de procedimentos${badge()}</h3>${notice('good', `<b>${SIMP.out.length} preço(s)</b> em ${new Set(SIMP.out.map(t=>t.payer)).size} convênio(s).`)}
-    <div class="tscroll"><table class="tbl sm"><thead><tr><th>Convênio</th><th>Código</th><th>Descrição</th><th>Grupo</th><th>Valor</th></tr></thead><tbody>${SIMP.out.slice(0,12).map(t=>`<tr><td>${esc(t.payer)}</td><td>${esc(t.code)}</td><td>${esc(t.desc)}</td><td>${esc(t.group)}</td><td class="num">${fmtMoney2(t.value)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="tscroll"><table class="tbl sm"><thead><tr><th>Convênio</th><th>Código</th><th>Procedimento</th><th>Grupo</th><th>Valor</th></tr></thead><tbody>${SIMP.out.slice(0,12).map(t=>`<tr><td>${esc(t.payer)}</td><td>${esc(t.code)}</td><td>${esc(t.desc)}</td><td>${esc(t.group)}</td><td class="num">${fmtMoney2(t.value)}</td></tr>`).join('')}</tbody></table></div>
     <div class="row end">${cancelBtn()}<button class="btn" onclick="commitTable('merge')">Atualizar e incluir</button><button class="btn pdf" onclick="commitTable('replace')">Substituir a tabela</button></div></div>`;
 }
 function commitTable(mode){
@@ -3001,7 +3006,7 @@ function previewAgenda(){
   for (const r of SIMP.rows) {
     const d = toDate(G(r,'date')); const prof = String(G(r,'profAt')).trim() || String(G(r,'prof')).trim(); if (!d || !prof) { bad++; continue; }
     const bk = toDate(G(r,'booked'));
-    recs.push({ d: isoLocal(d), h: String(G(r,'time')).slice(0,5), prof, esp: String(G(r,'esp')).trim(), payer: String(G(r,'payer')).trim() || 'Não informado',
+    recs.push({ d: isoLocal(d), h: String(G(r,'time')).slice(0,5), prof, esp: String(G(r,'esp')).trim(), payer: String(G(r,'payer')).trim() || defPayer() || 'Não informado',
       code: String(G(r,'code')).replace(/\D/g,''), proc: String(G(r,'proc')).trim(), st: String(G(r,'status')).trim(), bk: bk ? isoLocal(bk) : '', p: patKey(G(r,'pid'), G(r,'name')), n: nameKey(G(r,'name')) });
   }
   SIMP.out = recs; const dates = recs.map(r => r.d).sort(); SIMP.range = [dates[0], dates[dates.length-1]];
