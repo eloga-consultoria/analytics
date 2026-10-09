@@ -672,7 +672,7 @@ const PDFW_B64='LyoqCiAqIEBsaWNzdGFydCBUaGUgZm9sbG93aW5nIGlzIHRoZSBlbnRpcmUgbGlj
    01 - Núcleo: campos, estado, armazenamento e utilitários
    ========================================================= */
 'use strict';
-const APP_VERSION = '3.0.0-beta.14';
+const APP_VERSION = '3.0.0-beta.15';
 const STORE_KEY = 'eloga_painel_financeiro_v1';
 const $ = id => document.getElementById(id);
 
@@ -2237,7 +2237,7 @@ function renderImport(){
   $('pg_importar').innerHTML = head('Importar planilhas','Excel (.xlsx, .xls) ou CSV. O painel identifica as colunas automaticamente e você confirma antes de gravar.') + `
   <div class="card smart"><div><h3>Importação inteligente</h3><p>Envie o arquivo como ele sai do sistema da clínica ou do portal da operadora. O painel reconhece o formato (ex.: relatório de atendimentos do iSysMed, tabela de procedimentos) e, se for um modelo novo, pede as colunas uma única vez e aprende.</p></div><button class="btn pdf" onclick="smartImport()">Enviar arquivo</button></div>
   <div class="grid"><div class="card c7"><h3>Planilhas no formato ELOGA</h3>${['mensal','lanc'].map(card).join('')}<p class="muted" style="margin-top:8px">Agenda, tabela de procedimentos, faturamento enviado, demonstrativos e recebimentos são importados pela <b>importação inteligente</b> acima ou nas abas Cadastros e Faturamento e glosas.</p></div>
-  <div class="card c5"><h3>Planilha-modelo ELOGA</h3><p class="muted">Um arquivo com as 4 abas (Mensal, Lançamentos, Atendimentos, Glosas) e uma aba de instruções com a legenda de cada coluna.</p><button class="btn" onclick="downloadTemplate()">Baixar planilha-modelo</button>
+  <div class="card c5"><h3>Planilha-modelo ELOGA</h3><p class="muted">Um arquivo com as 4 abas (Mensal, Lançamentos, Atendimentos, Glosas) e uma aba de instruções com a legenda de cada coluna.</p><button class="btn" onclick="downloadTemplate()">Baixar planilha-modelo</button> <a class="btn ghost" href="modelos/Modelo_Custos_ELOGA_Estetica.xlsx" download>Modelo de custos e despesas (estética)</a>
   ${notice('', '<b>Não precisa usar o modelo.</b> Planilhas exportadas de outros sistemas também funcionam: basta indicar qual coluna corresponde a cada informação.')}
   ${notice('warn', '<b>LGPD:</b> não importe nome ou CPF de pacientes. Colunas não mapeadas são descartadas e nada sai deste computador.')}</div>
   <div id="impWork" class="c12"></div>
@@ -4968,5 +4968,6 @@ fatGlosas = function(){ const h = _fatGlosas0(); if (!S.dem.length) return h;
 <script src="exec-plus.js"></script>
 <script src="import-help.js"></script>
 <script src="caixa-fluxo.js"></script>
+<script src="est-fin.js"></script>
 </body>
 </html>

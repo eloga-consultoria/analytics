@@ -8,9 +8,9 @@
   /* ---------- 1. Arquivos importados ---------- */
   function table(types) {
     const list = (S.imports || []).filter(i => !types || types.includes(i.type));
-    if (!list.length) return `<div class="card"><h3>Arquivos importados</h3><p class="muted">Nenhum arquivo importado ainda.</p></div>`;
-    return `<div class="card"><h3>Arquivos importados</h3><p class="muted">Excluir um arquivo remove das análises os dados que vieram dele.</p>
-      <div class="tscroll"><table class="tbl sm"><thead><tr><th>Data</th><th>Tipo</th><th>Arquivo</th><th>Registros</th><th>Observação</th><th></th></tr></thead><tbody>
+    if (!list.length) return `<div class="card c12" style="grid-column:1/-1"><h3>Arquivos importados</h3><p class="muted">Nenhum arquivo importado ainda.</p></div>`;
+    return `<div class="card c12" style="grid-column:1/-1"><h3>Arquivos importados</h3><p class="muted">Excluir um arquivo remove das análises os dados que vieram dele.</p>
+      <div class="tscroll" style="width:100%"><table class="tbl sm" style="width:100%"><thead><tr><th>Data</th><th>Tipo</th><th>Arquivo</th><th>Registros</th><th>Observação</th><th></th></tr></thead><tbody>
       ${list.slice(0, 60).map(i => `<tr><td>${brd(i.date)}</td><td>${esc(TYPE_N[i.type] || i.type)}</td><td>${esc(i.file || '—')}</td><td class="num">${fmtNum(i.count || 0)}</td><td>${esc(i.note || '')}</td><td><button class="btn ghost sm" onclick="ImpMgr.del('${i.id || ''}','${S.imports.indexOf(i)}')">Excluir</button></td></tr>`).join('')}
       </tbody></table></div></div>`;
   }
