@@ -672,7 +672,7 @@ const PDFW_B64='LyoqCiAqIEBsaWNzdGFydCBUaGUgZm9sbG93aW5nIGlzIHRoZSBlbnRpcmUgbGlj
    01 - Núcleo: campos, estado, armazenamento e utilitários
    ========================================================= */
 'use strict';
-const APP_VERSION = '3.0.0-beta.13';
+const APP_VERSION = '3.0.0-beta.14';
 const STORE_KEY = 'eloga_painel_financeiro_v1';
 const $ = id => document.getElementById(id);
 
@@ -2805,7 +2805,10 @@ const KINDS = {
     {k:'desc', l:'Nome do procedimento', req:1, syn:['nome do procedimento','procedimento','servico','nome','descricao']},
     {k:'det', l:'Descrição detalhada (opcional)', syn:['descricao detalhada','detalhamento','observacao']},
     {k:'group', l:'Grupo / especialidade', syn:['grupo','especialidade','categoria']},
-    {k:'value', l:'Valor', req:1, syn:['valor','preco']}]},
+    {k:'dur', l:'Duração média (min) (opcional)', syn:['duracao','duracao min','duracao media','tempo','tempo medio','duracao do procedimento']},
+    {k:'pkgf', l:'É pacote? sim/não (opcional)', syn:['pacote','e pacote','tipo pacote']},
+    {k:'pkgn', l:'Sessões do pacote (opcional)', syn:['sessoes','n sessoes','numero de sessoes','qtd sessoes','sessoes do pacote','quantidade de sessoes']},
+    {k:'value', l:'Valor (se for pacote, o valor do pacote)', req:1, syn:['valor','preco','valor do pacote']}]},
   fat: { n:'Atendimentos enviados ao faturamento', fields:[
     {k:'date', l:'Data do atendimento', req:1, syn:['dt atend','data atendimento','data realizacao','data']},
     {k:'pid', l:'Código do paciente', syn:['id pac','codigo paciente','prontuario']},
@@ -2889,11 +2892,14 @@ function kindOf(r){ const k = stKey(r); return S.cad.statusMap[k] || defaultKind
 /* ---------- Tabela de preços ---------- */
 let _pidx = null;
 function priceIndex(){ if (_pidx) return _pidx; const idx = {}, byPayer = {};
-  for (const t of S.cad.table) { const v = toNum(t.value); if (!isNum(v)) continue; const p = norm(t.payer);
+  for (const t of S.cad.table) { const p = norm(t.payer); const du = toNum(t.dur);
+    if (du > 0) { if (t.desc) idx['u|' + p + '|d|' + norm(t.desc)] = du; if (t.code) idx['u|' + p + '|c|' + String(t.code).replace(/\D/g,'')] = du; }
+    const v = toNum(t.value); if (!isNum(v)) continue;
     if (t.desc) idx[p + '|d|' + norm(t.desc)] = v; if (t.code) idx[p + '|c|' + String(t.code).replace(/\D/g,'')] = v; (byPayer[p] = byPayer[p] || []).push(v); }
   idx._modal = Object.fromEntries(Object.entries(byPayer).map(([p, a]) => { const c = {}; a.forEach(v => c[v] = (c[v]||0)+1); return [p, +Object.entries(c).sort((x,y)=>y[1]-x[1])[0][0]]; }));
   return (_pidx = idx); }
 function priceOf(r){ const idx = priceIndex(); const p = norm(r.payer); return idx[p + '|c|' + String(r.code||'').replace(/\D/g,'')] ?? idx[p + '|d|' + norm(r.proc)] ?? null; }
+function procDur(r){ const idx = priceIndex(); const p = norm(r.payer); return idx['u|' + p + '|c|' + String(r.code||'').replace(/\D/g,'')] ?? idx['u|' + p + '|d|' + norm(r.proc)] ?? null; }
 function payerPrice(payer, code, desc){ const idx = priceIndex(); const p = norm(payer); return idx[p + '|c|' + String(code||'').replace(/\D/g,'')] ?? (desc ? idx[p + '|d|' + norm(desc)] : null) ?? idx._modal[p] ?? null; }
 const isPrivate = name => /partic|privad|propri/.test(norm(name));
 function payerOpts(sel, withPart){ return S.cad.payers.filter(p => withPart || p.type !== 'Particular').map(p => `<option ${norm(p.name)===norm(sel)?'selected':''}>${esc(p.name)}</option>`).join(''); }
@@ -2987,10 +2993,22 @@ function smartNext(){
 function badge(){ return SIMP.profile ? ` · <span class="chip ok">Reconhecido: ${esc(SIMP.profile.name)}</span>` : ''; }
 function cancelBtn(){ return `<button class="btn ghost" onclick="this.closest('.card').remove()">Cancelar</button>`; }
 
+const durMin = v => { const t = String(v ?? '').trim(); if (!t) return null; let m = t.match(/^(\d{1,2}):(\d{2})/); if (m) return +m[1] * 60 + +m[2]; m = t.match(/^(\d+(?:[.,]\d+)?)\s*h(?:oras?)?(?:\s*(\d+))?/i); if (m) return Math.round(toNum(m[1]) * 60 + (+m[2] || 0)); const n = toNum(t.replace(/[^\d.,]/g, '')); return n > 0 ? n : null; };
+const nFromName = d => { const m = String(d || '').match(/(\d{1,3})\s*(?:sess|x\b|aplic)/i); return m ? +m[1] : 0; };
 function previewTable(){
-  SIMP.out = SIMP.rows.map(r => ({ payer: String(G(r,'payer')).trim() || defPayer(), code: String(G(r,'code')).replace(/\D/g,''), desc: String(G(r,'desc')).trim(), det: String(G(r,'det')).trim(), group: String(G(r,'group')).trim(), value: toNum(G(r,'value')) })).filter(t => t.payer && t.desc && isNum(t.value));
-  workBox().innerHTML = `<div class="card"><h3>Tabela de procedimentos${badge()}</h3>${notice('good', `<b>${SIMP.out.length} preço(s)</b> em ${new Set(SIMP.out.map(t=>t.payer)).size} convênio(s).`)}
-    <div class="tscroll"><table class="tbl sm"><thead><tr><th>Convênio</th><th>Código</th><th>Procedimento</th><th>Grupo</th><th>Valor</th></tr></thead><tbody>${SIMP.out.slice(0,12).map(t=>`<tr><td>${esc(t.payer)}</td><td>${esc(t.code)}</td><td>${esc(t.desc)}</td><td>${esc(t.group)}</td><td class="num">${fmtMoney2(t.value)}</td></tr>`).join('')}</tbody></table></div>
+  if (SIMP.allPkg == null) SIMP.allPkg = false; if (!SIMP.pkgN) SIMP.pkgN = 10;
+  SIMP.out = SIMP.rows.map(r => {
+    const t = { payer: String(G(r,'payer')).trim() || defPayer(), code: String(G(r,'code')).replace(/\D/g,''), desc: String(G(r,'desc')).trim(), det: String(G(r,'det')).trim(), group: String(G(r,'group')).trim(), value: toNum(G(r,'value')) };
+    const du = durMin(G(r,'dur')); if (du) t.dur = du;
+    const f = norm(G(r,'pkgf')); const nn = toNum(G(r,'pkgn'));
+    const isPk = SIMP.allPkg || /^(s|sim|x|1|true|pacote|yes)/.test(f) || (isNum(nn) && nn > 1);
+    if (isPk) { t.pkg = true; t.n = (isNum(nn) && nn > 0 ? nn : 0) || nFromName(t.desc) || SIMP.pkgN; }
+    return t; }).filter(t => t.payer && t.desc && isNum(t.value));
+  const nPk = SIMP.out.filter(t => t.pkg).length, nDu = SIMP.out.filter(t => t.dur).length;
+  workBox().innerHTML = `<div class="card"><h3>Tabela de procedimentos${badge()}</h3>${notice('good', `<b>${SIMP.out.length} preço(s)</b> em ${new Set(SIMP.out.map(t=>t.payer)).size} convênio(s)/fonte(s) pagadora(s). ${nDu} com duração informada · ${nPk} como pacote.`)}
+    <div class="notice"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" ${SIMP.allPkg ? 'checked' : ''} onchange="SIMP.allPkg=this.checked;previewTable()"> <b>Estes itens são pacotes de procedimento</b> (ex.: 10 sessões de laser). O valor da planilha passa a ser o valor do pacote e a regra é criada na aba <b>Pacotes de procedimento</b>.</label>
+      ${SIMP.allPkg ? `<div class="field" style="max-width:260px;margin-top:6px"><label>Sessões por pacote (quando a planilha não informar)</label><input type="number" min="2" value="${SIMP.pkgN}" onchange="SIMP.pkgN=toNum(this.value)||10;previewTable()"></div>` : '<small>Sem marcar aqui, só viram pacote as linhas em que a planilha tiver a coluna “É pacote?” = sim ou “Sessões do pacote” maior que 1. Dá para marcar item a item depois, na tabela.</small>'}</div>
+    <div class="tscroll"><table class="tbl sm"><thead><tr><th>Fonte pagadora</th><th>Código</th><th>Procedimento</th><th>Grupo</th><th>Duração</th><th>Pacote</th><th>Valor</th></tr></thead><tbody>${SIMP.out.slice(0,12).map(t=>`<tr><td>${esc(t.payer)}</td><td>${esc(t.code)}</td><td>${esc(t.desc)}</td><td>${esc(t.group)}</td><td class="num">${t.dur ? t.dur + ' min' : '—'}</td><td>${t.pkg ? t.n + ' sessões' : '—'}</td><td class="num">${fmtMoney2(t.value)}</td></tr>`).join('')}</tbody></table></div>
     <div class="row end">${cancelBtn()}<button class="btn" onclick="commitTable('merge')">Atualizar e incluir</button><button class="btn pdf" onclick="commitTable('replace')">Substituir a tabela</button></div></div>`;
 }
 function commitTable(mode){
@@ -2999,7 +3017,8 @@ function commitTable(mode){
   const key = t => norm(t.payer) + '|' + (t.code || norm(t.desc)); const idx = Object.fromEntries(S.cad.table.map((t,i) => [key(t), i]));
   SIMP.out.forEach(t => { const k = key(t); if (k in idx) Object.assign(S.cad.table[idx[k]], t); else { S.cad.table.push(t); idx[k] = S.cad.table.length - 1; } });
   syncPayers(SIMP.out.map(t => t.payer)); logImport('tabela', SIMP.out.length, mode === 'replace' ? 'Tabela substituída' : 'Tabela atualizada', impId);
-  _pidx = null; resetAll(); toast(`${SIMP.out.length} preço(s) gravados.`, 'good'); SIMP = null; CADTAB = 'tabela'; show('cad');
+  const nPk = SIMP.out.filter(t => t.pkg).length; syncTablePkgs();
+  _pidx = null; resetAll(); toast(`${SIMP.out.length} preço(s) gravados.${nPk ? ` ${nPk} pacote(s) vinculados à aba Pacotes de procedimento.` : ''}`, 'good'); SIMP = null; CADTAB = 'tabela'; show('cad');
 }
 function previewAgenda(){
   const recs = []; let bad = 0;
@@ -3061,7 +3080,7 @@ function agStats(){
     K[k]++; const mo = M[m]; mo[k]++;
     const eleg = billable(r) && k !== 'agendado' && k !== 'reagendado' && k !== 'ignorar';
     let price = null; if (eleg) { price = pkgPrice(r); if (price === undefined) price = priceOf(r); mo.eleg++; elegN++; if (isNum(price)) { receita += price; mo.receita += price; } else semPreco++; }
-    if (k === 'realizado') { pacs.add(r.p); mo.pac.add(r.p); mo.horas += (slotOf[r.prof] || toNum(S.cad.clinic.slot) || 50) / 60; if (r.bk) { const a = (toDate(r.d) - toDate(r.bk))/864e5; if (a >= 0 && a < 400) antec.push(a); } }
+    if (k === 'realizado') { pacs.add(r.p); mo.pac.add(r.p); mo.horas += (procDur(r) || slotOf[r.prof] || toNum(S.cad.clinic.slot) || 50) / 60; if (r.bk) { const a = (toDate(r.d) - toDate(r.bk))/864e5; if (a >= 0 && a < 400) antec.push(a); } }
     for (const dk of (AgUn.has() ? ['prof','esp','proc','payer','unit'] : ['prof','esp','proc','payer'])) { const nm = (dk === 'unit' ? UO(r) : r[dk]) || 'Não informado'; const g = (dims[dk][nm] = dims[dk][nm] || Object.assign(emptyK(), { receita:0, pac:new Set(), bm:{} })); g[k]++; if (eleg) g.receita += price || 0; if (k === 'realizado') g.pac.add(r.p);
       const gm = (g.bm[m] = g.bm[m] || Object.assign(emptyK(), { receita:0 })); gm[k]++; if (eleg) gm.receita += price || 0; }
     if (k !== 'agendado' && r.h) { const w = toDate(r.d).getDay(); const h = r.h.slice(0,2); const c = (heat[w+'|'+h] = heat[w+'|'+h] || { ag:0, real:0 }); c.ag++; if (k === 'realizado') c.real++; }
@@ -3091,7 +3110,7 @@ function agendaMonthly(){
   if (!S.agenda.length) return {}; const out = {}; const slotOf = {}; S.cad.profs.forEach(p => slotOf[p.name] = toNum(p.slot));
   for (const r of S.agenda) { const k = kindOf(r); if (k === 'ignorar' || k === 'agendado' || k === 'reagendado') continue; const ym = r.d.slice(0,7);
     const o = (out[ym] = out[ym] || { ag:0, real:0, faltas:0, canc_clin:0, elegiveis:0, horas:0 });
-    o.ag++; if (k === 'realizado') { o.real++; o.horas += (slotOf[r.prof] || toNum(S.cad.clinic.slot) || 50) / 60; }
+    o.ag++; if (k === 'realizado') { o.real++; o.horas += (procDur(r) || slotOf[r.prof] || toNum(S.cad.clinic.slot) || 50) / 60; }
     if (k === 'falta' || k === 'falta_cob') o.faltas++; if (k === 'canc_clin' || k === 'aus_prof') o.canc_clin++; if (billable(r) && k !== 'agendado' && k !== 'reagendado') o.elegiveis++; }
   Object.keys(out).forEach(ym => { let c = 0, any = false; S.cad.profs.filter(p => p.active !== false).forEach(p => { const v = profCapacity(p, ym); if (isNum(v)) { any = true; c += v; } }); if (any) out[ym].capacidade = c; else { const rc = roomCapacity(ym); if (isNum(rc)) out[ym].capacidade = rc; } out[ym].horas = Math.round(out[ym].horas); });
   return out;
@@ -3143,7 +3162,7 @@ const AG_NOTES = {
 /* ---------- Tela: Cadastros ---------- */
 let CADTAB = 'payers';
 function renderCad(){
-  const tabs = [['payers','Convênios'],['tabela','Tabela de procedimentos'],['clinica','Funcionamento e pagamentos'],['profs','Profissionais e grade'],['pacotes','Pacotes de convênio'],['custos','Custos e margem'],['repasse','Repasse'],['status','Status da agenda'],['unidades','Unidades']];
+  const tabs = [['payers','Convênios'],['tabela','Tabela de procedimentos'],['clinica','Funcionamento e pagamentos'],['profs','Profissionais e grade'],['pacotes','Pacotes de procedimento'],['custos','Custos e margem'],['repasse','Repasse'],['status','Status da agenda'],['unidades','Unidades']];
   $('pg_cad').innerHTML = head('Cadastros do cliente','Tudo o que é específico deste cliente: convênios, preços, horário de funcionamento, profissionais, regras de repasse e significado dos status da agenda.') +
     `<div class="subtabs">${tabs.map(([k,l]) => `<button class="${CADTAB===k?'active':''}" onclick="CADTAB='${k}';renderCad()">${l}${k==='status' && S.agenda.length && !S.cad.statusOK ? ' <span class="chip warn">confirmar</span>':''}</button>`).join('')}</div><div id="cadWork"></div><div id="cadBody"></div>`;
   ({ payers:cadPayers, tabela:cadTabela, clinica:cadClinica, profs:cadProfs, pacotes:cadPacotes, custos:cadCustos, repasse:cadRepasse, status:cadStatus, unidades:cadUnidades })[CADTAB]();
@@ -3161,10 +3180,10 @@ function cadPayers(){
 let TBF = '';
 function cadTabela(){
   const T = S.cad.table; const payers = [...new Set(T.map(t => t.payer))].sort(); const rows = T.map((t,i) => [t,i]).filter(([t]) => !TBF || t.payer === TBF);
-  $('cadBody').innerHTML = `<div class="card"><div class="chead"><h3>Tabela de procedimentos e valores</h3><div class="row" style="margin:0"><select onchange="TBF=this.value;renderCad()"><option value="">Todos os convênios</option>${payers.map(p=>`<option ${TBF===p?'selected':''}>${esc(p)}</option>`).join('')}</select><button class="btn sm" onclick="smartImport('tabela')">Importar tabela</button><button class="btn sm ghost" onclick="S.cad.table.push({payer:TBF||'',code:'',desc:'',group:'',value:null});save();renderCad()">+ Linha</button></div></div>
-    <div class="tscroll"><table class="tbl"><thead><tr><th>Convênio</th><th>Código</th><th>Descrição</th><th>Grupo / especialidade</th><th>Valor (R$)</th><th></th></tr></thead><tbody>
-    ${rows.map(([t,i]) => `<tr>${['payer','code','desc','group'].map(k => `<td><input class="cin ${k==='code'?'sm':''}" value="${esc(t[k]??'')}" onchange="S.cad.table[${i}]['${k}']=this.value;resetAll()"></td>`).join('')}<td><input class="cin sm num" value="${isNum(toNum(t.value))?fmtNum(toNum(t.value),2):''}" onchange="S.cad.table[${i}].value=toNum(this.value);resetAll()"></td><td><button class="lnk" onclick="S.cad.table.splice(${i},1);resetAll();renderCad()">remover</button></td></tr>`).join('') || '<tr><td colspan="6" class="muted">Tabela vazia.</td></tr>'}
-    </tbody></table></div><div class="howto"><b>Como usar:</b> base da receita estimada, do repasse percentual, da quantidade de sessões por guia e do subpagamento.</div></div>`;
+  $('cadBody').innerHTML = `<div class="card"><div class="chead"><h3>Tabela de procedimentos e valores</h3><div class="row" style="margin:0"><select onchange="TBF=this.value;renderCad()"><option value="">Todos os convênios</option>${payers.map(p=>`<option ${TBF===p?'selected':''}>${esc(p)}</option>`).join('')}</select><button class="btn sm" onclick="smartImport('tabela')">Importar tabela</button><button class="btn sm ghost" onclick="S.cad.table.push({payer:TBF||defPayer(),code:'',desc:'',group:'',value:null});save();renderCad()">+ Linha</button></div></div>
+    <div class="tscroll"><table class="tbl"><thead><tr><th>Convênio / fonte</th><th>Código</th><th>Nome do procedimento</th><th>Grupo / especialidade</th><th title="Tempo médio do procedimento. Usado nas horas produzidas.">Duração (min)</th><th title="Marque quando o item é vendido em pacote de várias sessões. A regra é criada na aba Pacotes de procedimento.">Pacote?</th><th>Sessões</th><th>Valor (R$) <small>(pacote: valor do pacote)</small></th><th></th></tr></thead><tbody>
+    ${rows.map(([t,i]) => `<tr>${['payer','code','desc','group'].map(k => `<td><input class="cin ${k==='code'?'sm':''}" value="${esc(t[k]??'')}" onchange="S.cad.table[${i}]['${k}']=this.value;resetAll()"></td>`).join('')}<td><input class="cin xs num" value="${t.dur ? esc(t.dur) : ''}" placeholder="min" onchange="S.cad.table[${i}].dur=durMin(this.value)||null;resetAll()"></td><td style="text-align:center"><input type="checkbox" ${t.pkg ? 'checked' : ''} onchange="tabPkg(${i},this.checked)"></td><td><input class="cin xs num" ${t.pkg ? '' : 'disabled'} value="${t.pkg ? esc(t.n || '') : ''}" onchange="S.cad.table[${i}].n=toNum(this.value)||1;resetAll();renderCad()"></td><td><input class="cin sm num" value="${isNum(toNum(t.value))?fmtNum(toNum(t.value),2):''}" onchange="S.cad.table[${i}].value=toNum(this.value);resetAll()"></td><td><button class="lnk" onclick="S.cad.table.splice(${i},1);resetAll();renderCad()">remover</button></td></tr>`).join('') || '<tr><td colspan="9" class="muted">Tabela vazia.</td></tr>'}
+    </tbody></table></div><div class="howto"><b>Como usar:</b> base da receita estimada, do repasse percentual, da quantidade de sessões por guia e do subpagamento. A <b>duração</b> de cada procedimento entra no cálculo das horas produzidas. Marcando <b>Pacote?</b> e informando as sessões, o item passa a valer como pacote (valor único pela 1ª sessão) e aparece automaticamente na aba <b>Pacotes de procedimento</b>.</div></div>`;
 }
 function cadClinica(){
   const h = S.cad.clinic.hours || (S.cad.clinic.hours = {}); const c = S.cad.clinic;
@@ -4412,6 +4431,23 @@ function cadPacotes(){
       <td><input class="cin" value="${esc(x.obs||'')}" onchange="cset('cad.pacotes.${i}.obs',this.value)"></td><td class="num">${fmtNum(use[i].s)}</td><td class="num">${fmtNum(use[i].pk)}</td><td><button class="lnk" onclick="S.cad.pacotes.splice(${i},1);resetAll();renderCad()">remover</button></td></tr>`).join('') || '<tr><td colspan="8" class="muted">Nenhuma regra. Ex.: Avaliação neuropsicológica · 8 sessões · R$ 1.200 pelo pacote.</td></tr>'}
     </tbody></table></div><div class="howto"><b>Como funciona:</b> para cada paciente, o valor do pacote entra na previsão de faturamento na <b>1ª sessão de cada pacote</b>; as demais sessões do mesmo pacote valem R$ 0 na previsão, para não multiplicar o valor pela tabela. Ao completar as N sessões, a próxima sessão abre um novo pacote. A regra vale para a receita estimada da agenda e para a previsão da aba Faturamento.</div></div>`;
 }
+
+/* ---------- Pacotes vindos da tabela de procedimentos ---------- */
+function tabPkg(i, on){ const t = S.cad.table[i]; t.pkg = !!on; if (on && !(toNum(t.n) > 0)) t.n = nFromName(t.desc) || 10; if (!on) delete t.n; resetAll(); renderCad(); }
+function syncTablePkgs(){
+  if (!S || !S.cad) return; const P = S.cad.pacotes = S.cad.pacotes || [];
+  const want = S.cad.table.filter(t => t.pkg && toNum(t.n) > 0 && t.desc).map(t => ({ payer: t.payer, proc: String(t.desc), n: toNum(t.n), valor: toNum(t.value), src: 'tabela', tk: norm(t.payer) + '|' + (t.code || norm(t.desc)) }));
+  const cur = P.filter(x => x.src === 'tabela'); if (!want.length && !cur.length) return;
+  const next = want.map(w => { const o = cur.find(c => c.tk === w.tk); return o ? Object.assign(o, w) : w; });
+  if (next.length !== cur.length || next.some((x, i) => cur[i] !== x)) S.cad.pacotes = P.filter(x => x.src !== 'tabela').concat(next);
+}
+const _resetAll0 = resetAll; resetAll = function(){ try { syncTablePkgs(); } catch (e) { console.error(e); } return _resetAll0.apply(this, arguments); };
+const _cadPacotes0 = cadPacotes;
+cadPacotes = function(){ _cadPacotes0(); const P = S.cad.pacotes || [];
+  const h = document.querySelector('#cadBody h3'); if (h) h.textContent = 'Procedimentos vendidos ou pagos por pacote';
+  document.querySelectorAll('#cadBody tbody tr').forEach((tr, i) => { if (!P[i] || P[i].src !== 'tabela') return; tr.querySelectorAll('input,select').forEach(e => e.disabled = true);
+    const last = tr.lastElementChild; if (last) last.innerHTML = '<span class="chip ok" title="Editar na aba Tabela de procedimentos">da tabela</span>'; });
+  const how = document.querySelector('#cadBody .howto'); if (how) how.insertAdjacentHTML('beforeend', ' <b>Linhas “da tabela”</b> vêm da aba Tabela de procedimentos (caixa Pacote?) e são alteradas lá; as demais podem ser digitadas aqui. Em clínica de estética, use a fonte pagadora “Particular”.'); };
 
 /* ---------- Salas e capacidade por especialidade ---------- */
 const _cadClinica0 = cadClinica;
