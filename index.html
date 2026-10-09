@@ -672,7 +672,7 @@ const PDFW_B64='LyoqCiAqIEBsaWNzdGFydCBUaGUgZm9sbG93aW5nIGlzIHRoZSBlbnRpcmUgbGlj
    01 - Núcleo: campos, estado, armazenamento e utilitários
    ========================================================= */
 'use strict';
-const APP_VERSION = '3.0.0-beta.11';
+const APP_VERSION = '3.0.0-beta.12';
 const STORE_KEY = 'eloga_painel_financeiro_v1';
 const $ = id => document.getElementById(id);
 
@@ -1027,6 +1027,13 @@ function base(ym){
 let _baseCache = {};
 function B(ym){ return _baseCache[ym] || (_baseCache[ym] = base(ym)); }
 function resetCalc(){ _baseCache = {}; invalidate(); _indCache = null; }
+/* Troca de cliente: zera TODOS os caches de cálculo e os estados de tela/importação em andamento,
+   para que nada de um cliente apareça em outro. */
+function resetClientState(ui){
+  try { _pidx = null; _cut = null; _pkg = null; _agCache = null; _rcm = null; } catch(e){}
+  resetCalc();
+  if (ui) { try { SIMP = null; IMP = null; RECIMP = null; AUTIMP = null; KITIMP = null; MKIMP = null; FISCIMP = []; FATP = ''; GLF = { payer:'', st:'' }; FUNP = ''; if (typeof FSEL !== 'undefined') { FSEL = null; FOP = ''; } } catch(e){} }
+}
 
 /* ---------- Catálogo de indicadores ----------
    dir: 1 maior é melhor | -1 menor é melhor | 0 neutro
@@ -2157,10 +2164,10 @@ function refreshClientSelect(){
   const sel = $('clientSel'); if (!sel) return;
   sel.innerHTML = Object.values(DB.clients).map(c => `<option value="${c.id}" ${c.id===S.id?'selected':''}>${esc(c.meta.tradeName||c.meta.company||'Cliente sem nome')}</option>`).join('');
 }
-function openClient(id){ if (!DB.clients[id]) return; DB.current = id; S = upgradeClient(DB.clients[id]); resetCalc(); save(true); refreshClientSelect(); show(PAGE === 'empresa' ? 'empresa' : 'exec'); }
+function openClient(id){ if (!DB.clients[id]) return; DB.current = id; S = upgradeClient(DB.clients[id]); resetClientState(true); save(true); refreshClientSelect(); show(PAGE === 'empresa' ? 'empresa' : 'exec'); }
 function newClient(){ const c = blankClient(); DB.clients[c.id] = c; DB.pendingNew = c.id; openClient(c.id); show('empresa'); toast('Novo cliente criado. Preencha a identificação.'); }
 function deleteClient(id){ const c = DB.clients[id]; if (!c) return; if (!confirm(`Excluir definitivamente "${c.meta.tradeName||c.meta.company||'Cliente sem nome'}" deste navegador? Faça backup antes, se precisar.`)) return;
-  delete DB.clients[id]; if (DB.current === id) { const ids = Object.keys(DB.clients); if (ids.length) DB.current = ids[0]; else { const n = blankClient(); DB.clients[n.id] = n; DB.current = n.id; } S = upgradeClient(DB.clients[DB.current]); resetCalc(); }
+  delete DB.clients[id]; if (DB.current === id) { const ids = Object.keys(DB.clients); if (ids.length) DB.current = ids[0]; else { const n = blankClient(); DB.clients[n.id] = n; DB.current = n.id; } S = upgradeClient(DB.clients[DB.current]); resetClientState(true); }
   save(true); refreshClientSelect(); show('clientes'); }
 function download(name, content, type){ const b = new Blob([content], { type }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500); }
 const slug = s => norm(s||'cliente').replace(/\s+/g,'_').slice(0,40) || 'cliente';
@@ -3989,7 +3996,7 @@ ECOLS.clients.splice(ECOLS.clients.length - 1, 0, ['cnpj','CNPJ','text'], ['parc
 function E2(){ const e = E(); for (const k of ['dem','res','contr','parc','rit','entr','okr']) if (!Array.isArray(e[k])) e[k] = []; e.vis = e.vis || {}; e.canais = e.canais || {}; e.cfg = Object.assign({ gsUrl:'', gsToken:'', lastSync:'' }, e.cfg); return e; }
 
 /* ---------- Ligação com o cliente do Analytics ---------- */
-function withClient(id, fn){ if (!id || !DB.clients[id]) return null; const prev = S; S = upgradeClient(DB.clients[id]); resetCalc(); try { return fn(); } catch(e){ console.warn(e); return null; } finally { S = prev; resetCalc(); } }
+function withClient(id, fn){ if (!id || !DB.clients[id]) return null; const prev = S; S = upgradeClient(DB.clients[id]); resetClientState(); try { return fn(); } catch(e){ console.warn(e); return null; } finally { S = prev; resetClientState(); } }
 function eloOf(analyticsId){ return E().clients.find(c => c.link === analyticsId); }
 function cliDiag(c){ return withClient(c.link, () => { const ps = pdcaStats(); return { idp: dGeral(), gaps: dGaps().length, acts: ps.n, done: ps.done, late: ps.late }; }); }
 
