@@ -2,7 +2,7 @@
    importar dentro de cada aba e lista de pacientes ao clicar nos números. */
 (function () {
   'use strict';
-  const TYPE_N = { agenda: 'Agenda', tabela: 'Tabela de procedimentos', part: 'Controle do particular', fat: 'Faturamento enviado', dem: 'Demonstrativo de análise', receb: 'Recebimentos', recurso: 'Extrato de recurso', attend: 'Atendimentos', denials: 'Glosas', mensal: 'Planilha mensal', lanc: 'Lançamentos', aut: 'Autorizações', kit: 'Kit', mkt: 'Marketing', espera: 'Lista de espera' };
+  const TYPE_N = { agenda: 'Agenda', tabela: 'Tabela de procedimentos', part: 'Controle do particular', fat: 'Faturamento enviado', dem: 'Demonstrativo de análise', receb: 'Recebimentos', recurso: 'Extrato de recurso', attend: 'Atendimentos', denials: 'Glosas', mensal: 'Planilha mensal', lanc: 'Lançamentos', aut: 'Autorizações', kit: 'Kit', mkt: 'Marketing', espera: 'Lista de espera', bank: 'Extrato bancário' };
   const brd = d => { try { return new Date(d).toLocaleDateString('pt-BR'); } catch (e) { return ''; } };
 
   /* ---------- 1. Arquivos importados ---------- */
@@ -27,6 +27,7 @@
         if (m && confirm('Importação anterior sem marcação: remover toda a agenda do período ' + m[0] + '?')) { const a = `${m[3]}-${m[2]}-${m[1]}`, b = `${m[6]}-${m[5]}-${m[4]}`; S.agenda = S.agenda.filter(r => r.d < a || r.d > b); removed = n0 - S.agenda.length; } else if (!m) return toast('Importação antiga sem identificação: não foi possível separar os registros.', 'bad'); }
       _cut = null;
     } else if (t === 'tabela') { const n0 = S.cad.table.length; S.cad.table = S.cad.table.filter(x => x.s !== imp.id); removed = n0 - S.cad.table.length; if (!removed) return toast('Importação antiga sem identificação: não foi possível separar os registros.', 'bad'); }
+    else if (t === 'bank') { const n0 = (S.detail.bank || []).length; S.detail.bank = (S.detail.bank || []).filter(x => x.s !== imp.id); removed = n0 - S.detail.bank.length; if (!removed) return toast('Importação antiga sem identificação.', 'bad'); }
     else if (t === 'part') { const n0 = S.part.length; S.part = S.part.filter(x => x.s !== imp.id); removed = n0 - S.part.length; if (!removed) return toast('Importação antiga sem identificação: não foi possível separar os registros.', 'bad'); }
     else if (t === 'fat' || t === 'dem') { const k = t === 'fat' ? 'fat' : 'dem'; const n0 = S[k].length; S[k] = S[k].filter(b => b.id !== imp.id); if (S[k].length === n0 && imp.file) S[k] = S[k].filter(b => b.file !== imp.file); removed = n0 - S[k].length; if (!removed) return toast('Lote não encontrado.', 'bad'); }
     else if (t === 'receb') { S.fat.concat(S.dem).forEach(b => { const n0 = (b.pays || []).length; b.pays = (b.pays || []).filter(p => p.s !== imp.id); removed += n0 - b.pays.length; }); if (!removed) return toast('Importação antiga sem identificação: remova os pagamentos na tela de lotes.', 'bad'); }
@@ -61,10 +62,10 @@
   /* ---------- 3. Importar dentro de cada aba ---------- */
   const BARS = {
     agenda: [['Importar agenda', "smartImport('agenda')"], ['Importar lista de espera', 'AgAdv.importEspera()']],
-    ciclo: [['Faturamento enviado', "smartImport('fat')"], ['Demonstrativo de análise', "smartImport('dem')"], ['Recebimentos', "smartImport('receb')"], ['Extrato de recurso', 'recImport()']],
+    ciclo: [['Demonstrativo de análise', "smartImport('dem')"], ['Recebimentos', "smartImport('receb')"], ['Extrato de recurso', 'recImport()']],
     prod: [['Agenda', "smartImport('agenda')"], ['Planilha mensal', "show('importar');startImport('mensal')"]],
     rent: [['Agenda', "smartImport('agenda')"], ['Planilha mensal', "show('importar');startImport('mensal')"], ['Lançamentos', "show('importar');startImport('lanc')"]],
-    caixa: [['Agenda', "smartImport('agenda')"], ['Controle do particular', "smartImport('part')"], ['Planilha mensal', "show('importar');startImport('mensal')"], ['Lançamentos', "show('importar');startImport('lanc')"]]
+    caixa: [['Extrato bancário', 'Bank.start()'], ['Agenda', "smartImport('agenda')"], ['Controle do particular', "smartImport('part')"], ['Planilha mensal', "show('importar');startImport('mensal')"], ['Lançamentos', "show('importar');startImport('lanc')"]]
   };
   function bar(page) {
     const sec = document.getElementById('pg_' + page); if (!sec || !BARS[page]) return;

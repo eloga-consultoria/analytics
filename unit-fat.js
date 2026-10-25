@@ -61,7 +61,7 @@
   }
   function setUnit(id, v) { const b = S.fat.concat(S.dem).find(x => x.id === id); if (!b) return; b.unit = v; resetAll(); show('ciclo'); }
   const _rc = window.renderCiclo;
-  window.renderCiclo = function () { const r = _rc.apply(this, arguments); try { const t = unitTable(); if (t) { const pg = document.getElementById('pg_ciclo'); const k = pg.querySelector('.kpis'); (k || pg.querySelector('.phead')).insertAdjacentHTML('afterend', t); } } catch (e) { console.error(e); } return r; };
+  window.renderCiclo = function () { return _rc.apply(this, arguments); }; // card "Faturamento por unidade" retirado do Ciclo de receita
   RENDER.ciclo = window.renderCiclo;
   window.UnitFat = { detect, match, unitTable, setUnit };
 })();

@@ -672,7 +672,7 @@ const PDFW_B64='LyoqCiAqIEBsaWNzdGFydCBUaGUgZm9sbG93aW5nIGlzIHRoZSBlbnRpcmUgbGlj
    01 - Núcleo: campos, estado, armazenamento e utilitários
    ========================================================= */
 'use strict';
-const APP_VERSION = '3.0.0-beta.15';
+const APP_VERSION = '3.0.0-beta.16';
 const STORE_KEY = 'eloga_painel_financeiro_v1';
 const $ = id => document.getElementById(id);
 
@@ -3793,7 +3793,7 @@ function renderEHoras(){
 function exportEloga(){ download(`ELOGA_gestao_interna_${todayIso()}.json`, JSON.stringify({ app:'ELOGA-GESTAO', version:APP_VERSION, exported:new Date().toISOString(), eloga: E() }, null, 1), 'application/json'); toast('Backup da gestão ELOGA gerado.'); }
 function setMode(m){ MODE = m; buildNav(); document.body.classList.toggle('mode-eloga', m === 'eloga'); $('modeBtn').textContent = m === 'eloga' ? '← Voltar aos clientes' : 'Gestão ELOGA'; show(m === 'eloga' ? 'e_painel' : 'clientes'); }
 const NAV_CLI = [
-  ['1','Importação',[['importar','Importar arquivos'],['soon','Leitor de PDFs (autodiagnóstico, proposta, plano)'],['fluxo','Fluxo de caixa do cliente (planilha modelo)']]],
+  ['1','Importação',[['importar','Importar arquivos'],['fluxo','Fluxo de caixa do cliente (planilha modelo)']]],
   ['2','Preenchimento',[['empresa','Cadastro do cliente'],['dados','Preencher dados'],['cad','Cadastros']]],
   ['3','Análise',[['exec','Visão executiva'],['agenda','Agenda e produção'],['rent','Rentabilidade'],['ciclo','Ciclo de receita'],['fat','Faturamento e glosas'],['caixa','Caixa e recebimento'],['rep','Repasse'],['fisc','Notas e impostos'],['ind','Indicadores']]],
   ['4','Diagnóstico',[['diag','Diagnóstico por pilares'],['estr','Estratégias']]],
@@ -4407,7 +4407,7 @@ function autCommit(){
   S.aut = (S.aut || []).filter(b => !(norm(b.payer) === norm(payer) && b.ci === ci && b.cf === cf));
   S.aut.push({ id: uid(), payer, ci, cf, file: AUTIMP.o.file, fonte: AUTIMP.o.fonte, imported: new Date().toISOString(), rows });
   logImport('aut', rows.length, `${payer} · ${fmtNum(rows.reduce((s,r)=>s+r.aut,0))} sessões autorizadas`); AUTIMP = null; SIMP = null; workBox().innerHTML = ''; resetAll();
-  toast(`${rows.length} guias importadas.`, 'good'); FTAB = 'visao'; FATP = payer; FT2 = 'funil'; show('fat'); }
+  toast(`${rows.length} guias importadas.`, 'good'); FTAB = 'visao'; FATP = payer; show('caixa'); }
 
 /* ---------- Pacotes de convênio (valor fixo por N sessões) ---------- */
 let _pkg = null;
@@ -4756,7 +4756,7 @@ function mktCommit(){ const K = MKIMP; const agg = mktAgg(); const M = mk().m; O
         Resumo do período · Faturamentos importados · Glosas · Importar
    ========================================================= */
 let FT2 = 'resumo', FOP = '', FSEL = null;
-const FT2TABS = [['resumo','Resumo do período'],['funil','Autorizado → recebido'],['aut','Autorizações'],['conf','Conferência guia a guia'],['lotes','Faturamentos importados'],['glosas','Glosas e recursos'],['importar','Importar arquivos']];
+const FT2TABS = [['resumo','Resumo do período'],['lotes','Faturamentos importados'],['glosas','Glosas e recursos'],['importar','Importar arquivos']];
 function fatStatus(b){ const t = todayIso(); const saldo = b.expected - b.paid;
   if (b.expected > 0 && saldo <= 0.01) return ['Pago','ok']; if (b.paid > 0) return [b.due && b.due < t ? 'Pago parcial · vencido' : 'Pago parcial','warn'];
   if (!b.envio) return ['Sem data de envio','']; if (b.due && b.due < t) return ['Vencido','no']; return ['Aguardando pagamento','']; }
@@ -4776,6 +4776,7 @@ function fatBase(){ const D = rcmData(); const ms = windowMonths(); const set = 
   return { D, ms, bs, M, payers, fatOf, tot, rec, aRec, venc, part, partV, partP };
 }
 function renderFat(){
+  if (!FT2TABS.some(t => t[0] === FT2)) FT2 = 'resumo'; // telas retiradas (funil, autorizações, conferência)
   const allPayers = [...new Set([...S.fat, ...S.dem].map(b => b.payer))].sort(); if (FOP && !allPayers.includes(FOP)) FOP = '';
   const nFat = S.fat.length + S.dem.length;
   $('pg_fat').innerHTML = head('Faturamento e glosas','Faturamentos enviados às operadoras por competência, situação de pagamento de cada lote e tratamento das glosas.') + `
@@ -4783,10 +4784,9 @@ function renderFat(){
     <span class="muted">${nFat ? `${nFat} arquivo(s) de faturamento importado(s). Os números seguem o <b>período</b> (acima) e a <b>operadora</b> selecionados.` : 'Nenhum faturamento importado ainda.'}</span></div></div>
   <div class="subtabs">${FT2TABS.map(([k,l]) => `<button class="${FT2===k?'active':''}" onclick="FT2='${k}';FSEL=null;renderFat()">${l}</button>`).join('')}</div>
   <div id="fatWork"></div>
-  ${FT2 === 'funil' ? fatFunil() : ''}${FT2 === 'aut' ? fatAut() : ''}${FT2 === 'conf' ? fatConfGuia() : ''}
-  ${!nFat && !['importar','funil','aut','conf'].includes(FT2) ? `<div class="card">${notice('warn', '<b>Nenhum faturamento importado.</b> Use a aba <b>Importar arquivos</b> para enviar a planilha de faturamento enviado, o demonstrativo de análise ou os recebimentos.')}<button class="btn" onclick="FT2='importar';renderFat()">Ir para Importar arquivos</button></div>` : ''}
+  ${!nFat && !['importar'].includes(FT2) ? `<div class="card">${notice('warn', '<b>Nenhum faturamento importado.</b> Use a aba <b>Importar arquivos</b> para enviar a planilha de faturamento enviado, o demonstrativo de análise ou os recebimentos.')}<button class="btn" onclick="FT2='importar';renderFat()">Ir para Importar arquivos</button></div>` : ''}
   ${nFat && FT2 === 'resumo' ? fatResumo() : ''}${nFat && FT2 === 'lotes' ? (FSEL ? fatDetalhe() : fatLotes()) : ''}${nFat && FT2 === 'glosas' ? fatGlosas() : ''}${FT2 === 'importar' ? fatImportar() : ''}`;
-  if (FT2 === 'funil' && typeof fatFunilCharts === 'function') fatFunilCharts(); if (nFat && FT2 === 'resumo') fatResumoCharts(); if (nFat && FT2 === 'glosas') fatGlosasChart(); if (FT2 === 'lotes' && FSEL) fatDetalheChart();
+  if (nFat && FT2 === 'resumo') fatResumoCharts(); if (nFat && FT2 === 'glosas') fatGlosasChart(); if (FT2 === 'lotes' && FSEL) fatDetalheChart();
 }
 
 /* ---------- 1. Resumo do período ---------- */
@@ -4969,5 +4969,6 @@ fatGlosas = function(){ const h = _fatGlosas0(); if (!S.dem.length) return h;
 <script src="import-help.js"></script>
 <script src="caixa-fluxo.js"></script>
 <script src="est-fin.js"></script>
+<script src="bank.js"></script>
 </body>
 </html>
